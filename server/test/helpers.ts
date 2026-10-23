@@ -3,6 +3,7 @@ import { expect, vi } from 'vitest'
 import type { Role } from '../../shared/rules.ts'
 import { app } from '../app.ts'
 import { db } from '../db.ts'
+import { outbox } from '../mailer.ts'
 
 type Execute = (...args: unknown[]) => Promise<unknown>
 
@@ -48,20 +49,31 @@ export async function resetDb() {
 
 let counter = 0
 
-/** Signs up. Returns the logged-in agent, the new user and what was sent. */
-export async function signUp(account: Partial<{ name: string; email: string; password: string; role: Role }> = {}) {
+/**
+ * Signs up. Returns the logged-in agent, the new user and what was sent. The email address counts
+ * as confirmed unless `verified` is false, and the confirmation email is taken out of the outbox,
+ * so tests about other emails see only theirs.
+ */
+export async function signUp(
+  account: Partial<{ name: string; email: string; password: string; role: Role; verified: boolean }> = {},
+) {
   counter++
+  const { verified = true, ...rest } = account
   const body = {
     name: `Person ${counter}`,
     email: `person${counter}@example.com`,
     password: PASSWORD,
     role: 'client' as Role,
-    ...account,
+    ...rest,
   }
   const agent = newAgent()
   const res = await agent.post('/api/signup').send(body)
   if (res.status !== 201) throw new Error(`Sign-up failed: ${res.status} ${JSON.stringify(res.body)}`)
-  return { agent, user: res.body.user, ...body }
+  const email = body.email.trim().toLowerCase()
+  const confirmation = outbox.findLastIndex((e) => e.to === email && e.text.includes('/verify-email?token='))
+  if (confirmation !== -1) outbox.splice(confirmation, 1)
+  if (verified) await db.execute('UPDATE users SET email_verified_at = NOW() WHERE id = ?', [res.body.user.id])
+  return { agent, user: { ...res.body.user, emailVerified: verified }, ...body }
 }
 
 export type Person = Awaited<ReturnType<typeof signUp>>

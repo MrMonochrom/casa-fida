@@ -1,7 +1,7 @@
 -- Casa Fida database. Load with: mysql -uroot < db/schema.sql
 -- Every amount of money is in whole cents (or euro cents, bani, kopecks), in the currency of the
 -- job or project it belongs to. The currencies are listed in shared/money.ts (CURRENCIES).
--- A database made before currencies were added is brought up to date by db/migrations/001-currencies.sql.
+-- An older database is brought up to date by the files in db/migrations, in order.
 
 CREATE DATABASE IF NOT EXISTS casa_fida CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE casa_fida;
@@ -14,6 +14,11 @@ CREATE TABLE users (
   name VARCHAR(100) NOT NULL,
   role ENUM('client', 'builder') NOT NULL,
   phone VARCHAR(40) NULL,
+  -- Set once the person opens the link in the confirmation email.
+  email_verified_at TIMESTAMP NULL,
+  -- SHA-256 of the token in the newest confirmation link, while it can still be used.
+  verify_token_hash CHAR(64) NULL UNIQUE,
+  verify_expires_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login_at TIMESTAMP NULL
 );

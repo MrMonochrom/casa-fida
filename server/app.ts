@@ -16,11 +16,15 @@ import { messageRoutes } from './routes/messages.ts'
 import { projectRoutes } from './routes/projects.ts'
 import { workRoutes } from './routes/work.ts'
 
-/** TRUST_PROXY: how many proxies (like Caddy) sit in front, so req.ip is the visitor's real address. */
+/**
+ * TRUST_PROXY: how many proxies (like Caddy) sit in front, so req.ip is the visitor's real address.
+ * "true" counts as one: trusting every proxy would let visitors make up their address in an
+ * X-Forwarded-For header and get around the login limits. Addresses or subnets work too.
+ */
 export function trustProxySetting(value: string | undefined): boolean | number | string {
-  if (!value) return false
+  if (!value || value === 'false') return false
   if (/^\d+$/.test(value)) return Number(value)
-  return value === 'true' ? true : value
+  return value === 'true' ? 1 : value
 }
 
 export interface AppOptions {

@@ -9,6 +9,7 @@ export interface UserRow extends RowDataPacket {
   name: string
   role: Role
   phone: string | null
+  email_verified_at: string | null
   created_at: string
 }
 
@@ -65,6 +66,7 @@ export async function ownAccount(user: UserRow) {
     name: user.name,
     role: user.role,
     phone: user.phone,
+    emailVerified: user.email_verified_at !== null,
     memberSince: Number(rows[0].created),
     builderProfile: user.role === 'builder' ? await builderProfileOf(user.id) : null,
   }

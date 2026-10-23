@@ -26,7 +26,8 @@ export const TRADES = {
 } as const
 export type Trade = keyof typeof TRADES
 export const TRADE_KEYS = Object.keys(TRADES) as Trade[]
-export const isTrade = (value: unknown): value is Trade => typeof value === 'string' && value in TRADES
+// Object.hasOwn rather than `in`, so names every object has, like "constructor", don't count.
+export const isTrade = (value: unknown): value is Trade => typeof value === 'string' && Object.hasOwn(TRADES, value)
 export const MAX_TRADES = 6
 
 /** When a client wants a job to start. */
@@ -37,7 +38,8 @@ export const JOB_TIMINGS = {
   flexible: "I'm flexible",
 } as const
 export type JobTiming = keyof typeof JOB_TIMINGS
-export const isJobTiming = (value: unknown): value is JobTiming => typeof value === 'string' && value in JOB_TIMINGS
+export const isJobTiming = (value: unknown): value is JobTiming =>
+  typeof value === 'string' && Object.hasOwn(JOB_TIMINGS, value)
 
 // Text limits.
 export const NAME_MAX = 100

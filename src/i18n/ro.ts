@@ -230,6 +230,15 @@ export const ro: Messages = {
       `Contul cu care sunteți conectat (${email}) este de constructor. Propunerile sunt pentru conturi de client: deconectați-vă, apoi deschideți din nou linkul pentru a vă înregistra ca client.`,
     goToMyAccount: 'Mergi la contul meu',
   },
+  verify: {
+    done: 'Adresa de email este confirmată',
+    doneText: (email: string) => `${email} este confirmată. Mulțumim!`,
+    bannerClient:
+      'Confirmați-vă adresa de email pentru ca propunerile constructorilor să ajungă direct în contul dvs. Am trimis un link la {email}.',
+    bannerBuilder: 'Confirmați-vă adresa de email pentru a putea trimite propuneri. Am trimis un link la {email}.',
+    sendAgain: 'Retrimite',
+    sent: 'Trimis. Verificați-vă emailul.',
+  },
   account: {
     title: 'Cont',
     builderSince: (date: string) => `Cont de constructor · membru din ${date}`,

@@ -45,7 +45,8 @@ describe('POST /api/projects (proposals)', () => {
       startDate: '2026-12-01',
       myRole: 'builder',
       builder: { id: bob.user.id, name: 'Bob Stone', businessName: 'Bob Builds' },
-      client: { id: ana.user.id, name: 'Ana Lima', email: 'ana@example.com' },
+      // Until Ana accepts, Bob sees only the name and email he typed, not her own details.
+      client: { id: ana.user.id, name: 'Cleo Client', email: 'ana@example.com', phone: null },
       invitedClient: null,
       money: { contract: 2_000_000, changes: 0, total: 2_000_000, invoiced: 0, paid: 0, outstanding: 0, leftToInvoice: 2_000_000 },
       stages: [
@@ -124,7 +125,7 @@ describe('POST /api/projects (proposals)', () => {
   it('limits how many proposals one builder sends in an hour', async () => {
     vi.stubEnv('RATE_LIMITS', 'on')
     const bob = await createBuilder()
-    for (let i = 0; i < 30; i++) await propose(bob, `c${i}@example.com`)
+    for (let i = 0; i < 20; i++) await propose(bob, `c${i}@example.com`)
     const res = await bob.agent.post('/api/projects').send(validProposal('one-more@example.com'))
     expect(res.status).toBe(429)
     vi.unstubAllEnvs()
@@ -231,7 +232,8 @@ describe('invite links', () => {
     const project = await propose(bob, ana.email)
     const res = await bob.agent.post(`/api/projects/${project.id}/invite-link`)
     expect(res.status).toBe(409)
-    expect(res.body.error).toBe('Ana already has this proposal in their account.')
+    // By the name the builder typed: the client's own isn't theirs to see yet.
+    expect(res.body.error).toBe('Cleo Client already has this proposal in their account.')
   })
 })
 

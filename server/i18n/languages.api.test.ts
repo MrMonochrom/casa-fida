@@ -59,7 +59,8 @@ describe('the language of answers', () => {
 
     const email = outbox.at(-1)!
     expect(email.subject).toBe('Bob Builds v-a trimis o propunere de proiect')
-    expect(email.text).toContain('Bună ziua, Ana Lima,')
+    // The name the builder typed: they don't see the client's own name until working together.
+    expect(email.text).toContain('Bună ziua, Cleo Client,')
     expect(email.text).toContain('Bob Stone (Bob Builds) v-a trimis o propunere pe Casa Fida:')
     expect(email.text.replace(/\s/g, ' ')).toContain('Preț: 20.000,50 $')
   })

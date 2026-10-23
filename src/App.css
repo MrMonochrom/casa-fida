@@ -1223,6 +1223,11 @@ a.list__row:hover {
   border-color: color-mix(in srgb, var(--info) 20%, transparent);
 }
 
+/* "Confirm your email address": the text takes the room, the button sits at the end. */
+.verify-banner > p:first-child {
+  flex: 1 1 320px;
+}
+
 .banner--brand {
   background: var(--brand-soft);
   border-color: color-mix(in srgb, var(--logo) 30%, transparent);

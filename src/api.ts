@@ -91,6 +91,10 @@ export const api = {
     request<{ user: User }>('POST', '/login', { email, password }).then((r) => r.user),
   signup: (input: SignupInput) => request<{ user: User }>('POST', '/signup', input).then((r) => r.user),
   logout: () => request<void>('POST', '/logout', {}),
+  /** Confirms an email address with the token from the confirmation email. */
+  verifyEmail: (token: string) =>
+    request<{ email: string }>('POST', '/verify-email', { token }).then((r) => r.email),
+  resendVerification: () => request<void>('POST', '/me/verify-email', {}),
   saveAccount: (name: string, phone: string) =>
     request<{ user: User }>('PUT', '/me', { name, phone }).then((r) => r.user),
   changePassword: (currentPassword: string, newPassword: string) =>

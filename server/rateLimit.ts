@@ -60,14 +60,27 @@ export function tooManyAttempts(res: Response, seconds: number) {
   fail(res, 429, (m) => m.general.tooManyAttempts(minutes))
 }
 
+const DAY = 24 * 60 * MINUTE
+
 // The limits themselves, in one place.
 export const limits = {
   /** Any login attempt from one IP address. */
   loginsPerIp: new Limiter(30, 15 * MINUTE),
-  /** Wrong passwords for one account, from anywhere. A right password clears the count. */
-  failedLoginsPerEmail: new Limiter(5, 15 * MINUTE),
+  /**
+   * Wrong passwords for one account from one IP address. Counted per address, so someone guessing
+   * can't lock the owner out from their own. A right password clears the count for that address.
+   */
+  failedLoginsPerEmailAndIp: new Limiter(5, 15 * MINUTE),
+  /**
+   * Wrong passwords for one account from anywhere: a backstop against guessing from many addresses.
+   * One address can't reach it alone (it stops at 20 an hour), so it can't be used to lock people out.
+   */
+  failedLoginsPerEmail: new Limiter(30, 60 * MINUTE),
   /** New accounts from one IP address. */
   signupsPerIp: new Limiter(10, 60 * MINUTE),
-  /** Invite emails one builder can send. */
-  invitesPerBuilder: new Limiter(30, 60 * MINUTE),
+  /** Proposal emails one builder can send, in an hour and in a day. */
+  invitesPerBuilder: new Limiter(20, 60 * MINUTE),
+  invitesPerBuilderPerDay: new Limiter(50, DAY),
+  /** Confirmation emails one person can ask for again. */
+  verificationEmailsPerUser: new Limiter(5, 60 * MINUTE),
 }

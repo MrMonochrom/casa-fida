@@ -192,6 +192,15 @@ export const en = {
       `You're logged in as a builder (${email}). Proposals are for client accounts: log out, then open the link again to sign up as a client.`,
     goToMyAccount: 'Go to my account',
   },
+  verify: {
+    done: 'Email address confirmed',
+    doneText: (email: string) => `${email} is confirmed. Thanks!`,
+    bannerClient:
+      'Confirm your email address so proposals from builders come straight into your account. We sent a link to {email}.',
+    bannerBuilder: 'Confirm your email address to send proposals. We sent a link to {email}.',
+    sendAgain: 'Send it again',
+    sent: 'Sent. Check your inbox.',
+  },
   account: {
     title: 'Account',
     builderSince: (date: string) => `Builder account · member since ${date}`,

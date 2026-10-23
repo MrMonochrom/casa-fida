@@ -20,7 +20,7 @@ import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
 import { appUrl, sendEmail } from '../mailer.ts'
 import { loadProject, moneyOf, projectAs, projectFor, projectSelect } from '../projects.ts'
-import type { ProjectRow, Side } from '../projects.ts'
+import type { ProjectRow, ProjectStatus, Side } from '../projects.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { me, requireRole, requireUser } from '../session.ts'
 import type { UserRow } from '../users.ts'
@@ -102,6 +102,20 @@ async function quoteOf(project: ProjectRow) {
   return rows[0] ? { jobId: project.job_id, weeks: rows[0].weeks as number | null, message: rows[0].message as string } : null
 }
 
+/**
+ * A client's own name, email and phone number are for builders they work with. A builder who has
+ * only sent a proposal (or had one declined) sees just the name and email they typed themselves,
+ * so a proposal can't be used to look up who has an account and how to call them.
+ */
+const builderMaySeeClient = (status: ProjectStatus) => status === 'active' || status === 'completed'
+
+function clientAsSeenBy(project: ProjectRow, side: Side) {
+  if (side === 'client' || builderMaySeeClient(project.status)) {
+    return { id: project.client_id!, name: project.client_user_name!, email: project.client_user_email!, phone: project.client_phone }
+  }
+  return { id: project.client_id!, name: project.client_name, email: project.client_email, phone: null }
+}
+
 /** Everything on a project page, for either side. */
 export async function projectDetail(project: ProjectRow, side: Side) {
   const linked = project.client_id !== null
@@ -133,9 +147,7 @@ export async function projectDetail(project: ProjectRow, side: Side) {
       email: project.builder_email,
       phone: project.builder_phone,
     },
-    client: linked
-      ? { id: project.client_id!, name: project.client_user_name!, email: project.client_user_email!, phone: project.client_phone }
-      : null,
+    client: linked ? clientAsSeenBy(project, side) : null,
     // Who the proposal was sent to, until they have an account.
     invitedClient: linked ? null : { name: project.client_name, email: project.client_email },
     money,
@@ -192,7 +204,12 @@ projectRoutes.get('/projects', requireUser, async (_req, res) => {
         startDate: r.start_date,
         createdAt: Number(r.created_at),
         builder: { id: r.builder_id, name: r.builder_name, businessName: r.business_name },
-        client: r.client_id ? { id: r.client_id, name: r.client_user_name! } : null,
+        client: r.client_id
+          ? {
+              id: r.client_id,
+              name: user.role === 'client' || builderMaySeeClient(r.status) ? r.client_user_name! : r.client_name,
+            }
+          : null,
         invitedClient: r.client_id ? null : { name: r.client_name, email: r.client_email },
         progress: { done: Number(r.stages_done), total: Number(r.stages_total) },
         money: { total, invoiced: Number(r.invoiced), paid: Number(r.paid) },
@@ -275,13 +292,17 @@ async function newInviteLink(projectId: number) {
   return `${appUrl()}/invite?token=${encodeURIComponent(token)}`
 }
 
-// Sends a client a proposal: the work, its price and (optionally) its stages. If the client has no
-// account yet, they get an email with an invite link to sign up and see it.
+// Sends a client a proposal: the work, its price and (optionally) its stages. It goes straight into
+// the account of a client who has confirmed that email address. Anyone else gets an email with an
+// invite link, to sign up (or log in) and see it.
 projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
   const builder = me(res)
   const [profile] = await db.execute<RowDataPacket[]>('SELECT 1 FROM builder_profiles WHERE user_id = ?', [builder.id])
   if (!profile.length) return fail(res, 409, (m) => m.projects.needProfile)
-  const wait = limits.invitesPerBuilder.retryAfter(String(builder.id))
+  // Proposals send email in Casa Fida's name, so only from builders who have confirmed their own.
+  if (!builder.email_verified_at) return fail(res, 409, (m) => m.projects.confirmEmailFirst)
+  const key = String(builder.id)
+  const wait = Math.max(limits.invitesPerBuilder.retryAfter(key), limits.invitesPerBuilderPerDay.retryAfter(key))
   if (wait) return tooManyAttempts(res, wait)
 
   const body = req.body ?? {}
@@ -304,6 +325,8 @@ projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
   if (client?.role === 'builder') {
     return badRequest(res, (m) => m.projects.builderEmail)
   }
+  // Only someone who has shown the address is theirs gets the proposal without the emailed link.
+  const owner = client?.email_verified_at ? client : undefined
 
   const projectId = await inTransaction(async (conn) => {
     const [result] = await conn.execute<ResultSetHeader>(
@@ -312,8 +335,8 @@ projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed')`,
       [
         builder.id,
-        client?.id ?? null,
-        client?.name ?? clientName,
+        owner?.id ?? null,
+        clientName,
         clientEmail,
         details.title,
         details.description,
@@ -332,14 +355,15 @@ projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
     }
     return result.insertId
   })
-  limits.invitesPerBuilder.hit(String(builder.id))
+  limits.invitesPerBuilder.hit(key)
+  limits.invitesPerBuilderPerDay.hit(key)
 
   const project = (await loadProject(projectId))!
-  const link = client ? `${appUrl()}/projects/${projectId}` : await newInviteLink(projectId)
+  const link = owner ? `${appUrl()}/projects/${projectId}` : await newInviteLink(projectId)
   await sendProposalEmail(builder, project, clientEmail, link, !client, languageOf(req)).catch((err) =>
     console.error('Proposal email failed:', err),
   )
-  publish(client?.id, { type: 'project', projectId })
+  publish(owner?.id, { type: 'project', projectId })
   res.status(201).json({ project: await projectDetail((await loadProject(projectId))!, 'builder') })
 })
 
@@ -385,10 +409,8 @@ projectRoutes.delete('/projects/:id', requireRole('builder'), async (req, res) =
 // The link in the first email stops working.
 projectRoutes.post('/projects/:id/invite-link', requireRole('builder'), async (req, res) => {
   const project = await projectAs(res, req.params.id, 'builder', ['proposed'])
-  if (project.client_id) {
-    const name = project.client_user_name ?? project.client_name
-    return fail(res, 409, (m) => m.projects.alreadyClaimed(name))
-  }
+  // The name the builder typed, not the account's own: they don't see that until the client accepts.
+  if (project.client_id) return fail(res, 409, (m) => m.projects.alreadyClaimed(project.client_name))
   res.json({ link: await newInviteLink(project.id) })
 })
 
@@ -450,11 +472,15 @@ projectRoutes.post('/projects/:id/review', requireRole('client'), async (req, re
 
 const INVITE_GONE: Text = (m) => m.projects.inviteGone
 
+/**
+ * The proposal an invite link is for, while it's waiting for an answer. It may be in someone's
+ * account already: a client who confirmed this address after it was sent gets it straight away.
+ */
 async function projectForToken(token: unknown) {
   const value = text(token)
   if (!value || value.length > 100) return null
   const [rows] = await db.execute<ProjectRow[]>(
-    `${projectSelect()} WHERE p.invite_token_hash = ? AND p.status = 'proposed' AND p.client_id IS NULL`,
+    `${projectSelect()} WHERE p.invite_token_hash = ? AND p.status = 'proposed'`,
     [hashToken(value)],
   )
   return rows[0] ?? null
@@ -475,19 +501,21 @@ projectRoutes.post('/invites/preview', async (req, res) => {
   })
 })
 
-// Adds the proposal from an invite link to the logged-in client's account.
+// Adds the proposal from an invite link to the logged-in client's account. Opening it doesn't confirm
+// the account's email address, even when it's the one the builder typed: the builder can get a
+// fresh invite link too, so having one doesn't show that you can read that email.
 projectRoutes.post('/invites/claim', requireUser, async (req, res) => {
   const user = me(res)
   const project = await projectForToken(req.body?.token)
-  if (!project) throw notFound(INVITE_GONE)
+  if (!project || (project.client_id !== null && project.client_id !== user.id)) throw notFound(INVITE_GONE)
   if (user.role !== 'client') {
     return fail(res, 403, (m) => m.projects.inviteForClients)
   }
   const [result] = await db.execute<ResultSetHeader>(
-    'UPDATE projects SET client_id = ?, invite_token_hash = NULL WHERE id = ? AND client_id IS NULL',
-    [user.id, project.id],
+    'UPDATE projects SET client_id = ?, invite_token_hash = NULL WHERE id = ? AND (client_id IS NULL OR client_id = ?)',
+    [user.id, project.id, user.id],
   )
   if (result.affectedRows === 0) throw notFound(INVITE_GONE)
-  publish(project.builder_id, { type: 'project', projectId: project.id })
+  if (project.client_id === null) publish(project.builder_id, { type: 'project', projectId: project.id })
   res.json({ projectId: project.id })
 })

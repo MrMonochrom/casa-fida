@@ -18,6 +18,9 @@ INSERT INTO users (id, email, password_hash, name, role, phone, created_at) VALU
   (9, 'olivia.brooks@example.com', @pw, 'Olivia Brooks', 'client', NULL, NOW() - INTERVAL 450 DAY),
   (10, 'noah.patel@example.com', @pw, 'Noah Patel', 'client', NULL, NOW() - INTERVAL 5 DAY);
 
+-- The sample accounts have confirmed their email addresses.
+UPDATE users SET email_verified_at = created_at;
+
 INSERT INTO builder_profiles
   (user_id, business_name, headline, about, service_area, years_in_business, license_number, insured) VALUES
   (1, 'Reid & Sons Construction', 'Family-run general contractor for new homes, additions and whole-home remodels.',
