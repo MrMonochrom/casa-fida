@@ -18,6 +18,8 @@ Open http://localhost:5174 and log in with a [test account](#test-accounts), or 
 
 MySQL doesn't start by itself after a reboot, so run `npm run db:start` before `npm run dev`.
 
+If your database was made before currencies were added, bring it up to date once with `npm run db:shell < db/migrations/001-currencies.sql` (existing jobs and projects stay in US dollars).
+
 ## Test accounts
 
 [db/seed.sql](db/seed.sql) creates these accounts. All of them use the password **`CasaFida123`**.
@@ -59,6 +61,8 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 - **Messages** between a client and a builder, with read receipts.
 - **Live updates:** new messages, quotes and project changes appear without reloading, and the menu shows counts of what's waiting.
 - Works on phones and desktops, in light or dark mode.
+- **Prices in US dollars, euros, Moldovan lei, Romanian lei or Russian rubles.** A client picks the currency when posting a job, and a builder when sending a proposal. Quotes, the project, change orders and invoices then use it. The currency can't change once builders have quoted or the client has accepted.
+- **In English, Romanian or Russian.** The app starts in the browser's language and can be switched from the menu at the top of every page. Error messages and proposal emails come from the server in the same language.
 
 ## Scripts
 
@@ -96,7 +100,8 @@ src/                       React app
   api.ts                   Calls to the API server
   serverEvents.ts          Live updates
   useResource.ts           Loading data for a page, and reloading it after changes
-  format.ts                Dates, budgets and status labels
+  format.ts                Dates, budgets and status labels, in the current language
+  i18n/                    Every word the app shows: en.ts, ro.ts, ru.ts, and switching between them
   screens/                 One file per page: Home, FindBuilders, BuilderPage, MyJobs, JobForm,
                            ClientJob, FindWork, BuilderJob, Projects, ProposalForm, Messages, Account…
     project/               The project page: ProjectPage, Stages, Updates, Money
@@ -104,10 +109,12 @@ src/                       React app
   test/                    Test setup, sample data and the mocked API
 server/                    API server (TypeScript, run directly by Node)
   app.ts                   Routes, error handling, and serving the built app in production
+  i18n/                    Every error message and email the server sends, in each language
   routes/                  account, builders, jobs (and quotes), projects, work (stages, updates,
                            photos), billing (change orders, invoices), messages, live
-shared/                    Used by both the app and the server: limits, trades and money formatting
-db/                        schema.sql, seed.sql, and mysql.sh to run MySQL without installing it
+shared/                    Used by both the app and the server: limits, trades, languages, currencies and money formatting
+db/                        schema.sql, seed.sql, migrations/ for older databases, and mysql.sh to run MySQL
+                           without installing it
 ```
 
 Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx`, and `billing.api.test.ts` tests `billing.ts`.
@@ -115,7 +122,7 @@ Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx
 ## Tests
 
 ```sh
-npm test                 # all 389 tests
+npm test                 # all 438 tests
 npx vitest run --project web
 npx vitest run server/routes/billing.api.test.ts
 ```

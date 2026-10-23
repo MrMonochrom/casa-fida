@@ -2,25 +2,17 @@ import type { NextFunction, Request, Response } from 'express'
 import type { Role } from '../shared/rules.ts'
 import { db } from './db.ts'
 import { hashToken, newSessionToken } from './auth.ts'
+import { cookie } from './cookies.ts'
+import type { Text } from './i18n/index.ts'
+import { fail } from './validate.ts'
 import type { UserRow } from './users.ts'
 
 const SESSION_COOKIE = 'cf_session'
 const SESSION_DAYS = 30
 
 /** The session token from the request's cookie, if any. */
-export function sessionToken(req: Request): string | undefined {
-  for (const part of req.headers.cookie?.split(';') ?? []) {
-    const [key, ...rest] = part.trim().split('=')
-    if (key !== SESSION_COOKIE) continue
-    try {
-      return decodeURIComponent(rest.join('='))
-    } catch {
-      // A damaged cookie counts as no session, so the person is simply asked to log in again.
-      return undefined
-    }
-  }
-  return undefined
-}
+// A damaged cookie counts as no session, so the person is simply asked to log in again.
+export const sessionToken = (req: Request): string | undefined => cookie(req, SESSION_COOKIE)
 
 export async function startSession(res: Response, userId: number) {
   const token = newSessionToken()
@@ -60,16 +52,16 @@ export async function currentUser(req: Request): Promise<UserRow | null> {
 export async function requireUser(req: Request, res: Response, next: NextFunction) {
   const user = await currentUser(req)
   if (!user) {
-    res.status(401).json({ error: 'Please log in again.' })
+    fail(res, 401, (m) => m.general.logInAgain)
     return
   }
   res.locals.user = user
   next()
 }
 
-const ROLE_ONLY: Record<Role, string> = {
-  client: 'Only clients can do that.',
-  builder: 'Only builders can do that.',
+const ROLE_ONLY: Record<Role, Text> = {
+  client: (m) => m.general.clientsOnly,
+  builder: (m) => m.general.buildersOnly,
 }
 
 /** Route guard: like requireUser, and answers 403 unless the person has this role. */
@@ -77,7 +69,7 @@ export function requireRole(role: Role) {
   return async (req: Request, res: Response, next: NextFunction) => {
     await requireUser(req, res, () => {
       if (me(res).role !== role) {
-        res.status(403).json({ error: ROLE_ONLY[role] })
+        fail(res, 403, ROLE_ONLY[role])
         return
       }
       next()

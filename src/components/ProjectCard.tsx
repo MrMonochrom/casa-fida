@@ -1,5 +1,5 @@
-import { formatMoney } from '../../shared/money'
-import { PROJECT_STATUS } from '../format'
+import { formatMoney, projectStatus } from '../format'
+import { fill, useT } from '../i18n'
 import { projectTodos } from '../projectTodos'
 import { Link } from './Link'
 import type { ProjectSummary } from '../types'
@@ -7,10 +7,11 @@ import { Progress, StatusPill } from './ui'
 
 /** A project in a list: who it's with, how far along it is and what's waiting. */
 export function ProjectCard({ project, role }: { project: ProjectSummary; role: 'client' | 'builder' }) {
+  const t = useT()
   const withWhom =
     role === 'client'
       ? project.builder.businessName
-      : (project.client?.name ?? `${project.invitedClient?.name ?? 'Client'} (invited)`)
+      : (project.client?.name ?? t.projects.invited(project.invitedClient?.name ?? t.projects.client))
   const todos = projectTodos(project, role)
   return (
     <Link to={`/projects/${project.id}`} className="card card--link project-card">
@@ -22,19 +23,22 @@ export function ProjectCard({ project, role }: { project: ProjectSummary; role: 
             {project.address && ` · ${project.address}`}
           </p>
         </div>
-        <StatusPill look={PROJECT_STATUS[project.status]} />
+        <StatusPill look={projectStatus(project.status)} />
       </div>
       {(project.status === 'active' || project.status === 'completed') && (
         <>
           <Progress done={project.progress.done} total={project.progress.total} />
           <p className="project-card__money">
-            <strong>{formatMoney(project.money.paid)}</strong> paid of {formatMoney(project.money.total)}
+            {fill(t.projects.paidOf, {
+              paid: <strong>{formatMoney(project.money.paid, project.currency)}</strong>,
+              total: formatMoney(project.money.total, project.currency),
+            })}
           </p>
         </>
       )}
       {project.status === 'proposed' && (
         <p className="project-card__money">
-          Proposed price <strong>{formatMoney(project.money.total)}</strong>
+          {fill(t.projects.proposedPrice, { price: <strong>{formatMoney(project.money.total, project.currency)}</strong> })}
         </p>
       )}
       {todos.length > 0 && (

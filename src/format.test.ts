@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   ago,
   budgetText,
@@ -8,9 +8,10 @@ import {
   initials,
   invoiceStatus,
   isoDate,
-  plural,
+  jobStatus,
   weeksText,
 } from './format'
+import { setLanguage } from './i18n'
 
 const NOW = new Date(2026, 9, 23, 12, 0).getTime()
 const MINUTE = 60_000
@@ -58,19 +59,16 @@ describe('dates', () => {
 
 describe('budgetText', () => {
   it('shows whichever ends of the budget were given', () => {
-    expect(budgetText(1_800_000, 2_500_000)).toBe('$18,000 – $25,000')
-    expect(budgetText(1_800_000, 1_800_000)).toBe('$18,000')
-    expect(budgetText(null, 1_200_000)).toBe('Up to $12,000')
-    expect(budgetText(500_000, null)).toBe('From $5,000')
-    expect(budgetText(null, null)).toBe('No budget given')
+    expect(budgetText(1_800_000, 2_500_000, 'USD')).toBe('$18,000 – $25,000')
+    expect(budgetText(1_800_000, 1_800_000, 'USD')).toBe('$18,000')
+    expect(budgetText(null, 1_200_000, 'USD')).toBe('Up to $12,000')
+    expect(budgetText(500_000, null, 'USD')).toBe('From $5,000')
+    expect(budgetText(null, null, 'USD')).toBe('No budget given')
   })
 })
 
 describe('small words', () => {
   it('counts things', () => {
-    expect(plural(1, 'quote')).toBe('1 quote')
-    expect(plural(3, 'quote')).toBe('3 quotes')
-    expect(plural(0, 'quote')).toBe('0 quotes')
     expect(weeksText(1)).toBe('1 week')
     expect(weeksText(6)).toBe('6 weeks')
   })
@@ -96,5 +94,35 @@ describe('invoiceStatus', () => {
     expect(invoiceStatus({ status: 'due', overdue: true })).toEqual({ label: 'Overdue', tone: 'danger' })
     expect(invoiceStatus({ status: 'paid', overdue: false })).toEqual({ label: 'Paid', tone: 'success' })
     expect(invoiceStatus({ status: 'void', overdue: false })).toEqual({ label: 'Void', tone: 'neutral' })
+  })
+})
+
+describe('in Romanian and Russian', () => {
+  afterEach(() => setLanguage('en'))
+  // Intl puts no-break spaces in amounts and dates.
+  const plain = (text: string) => text.replace(/\s/g, ' ')
+
+  it('writes Romanian', () => {
+    setLanguage('ro')
+    expect(dayDateText('2026-11-01')).toBe('1 nov. 2026')
+    expect(ago(NOW - 5 * MINUTE, NOW)).toBe('acum 5 minute')
+    expect(ago(NOW - 25 * DAY, NOW)).toBe('acum 25 de zile')
+    expect(dayText(NOW - DAY, NOW)).toBe('Ieri')
+    expect(plain(budgetText(null, 1_200_000, 'USD'))).toBe('Până la 12.000 $')
+    expect(weeksText(1)).toBe('1 săptămână')
+    expect(daysChangeText(-2)).toBe('−2 zile')
+    expect(jobStatus('open')).toEqual({ label: 'Primește oferte', tone: 'info' })
+    expect(invoiceStatus({ status: 'due', overdue: true })).toEqual({ label: 'Restantă', tone: 'danger' })
+  })
+
+  it('writes Russian, with its three forms of a counted word', () => {
+    setLanguage('ru')
+    expect(plain(dayDateText('2026-11-01'))).toBe('1 нояб. 2026 г.')
+    expect(ago(NOW - MINUTE, NOW)).toBe('1 минуту назад')
+    expect(ago(NOW - 3 * HOUR, NOW)).toBe('3 часа назад')
+    expect(ago(NOW - 5 * DAY, NOW)).toBe('5 дней назад')
+    expect(plain(budgetText(1_800_000, 2_500_000, 'USD'))).toBe('18 000 $ – 25 000 $')
+    expect([1, 2, 5, 21].map(weeksText)).toEqual(['1 неделя', '2 недели', '5 недель', '21 неделя'])
+    expect(daysChangeText(3)).toBe('+3 дня')
   })
 })

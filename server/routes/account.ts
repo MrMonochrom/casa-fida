@@ -8,7 +8,7 @@ import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { currentUser, endSession, me, requireUser, sessionToken, startSession } from '../session.ts'
 import { loadUser, ownAccount } from '../users.ts'
 import type { UserRow } from '../users.ts'
-import { badRequest, isEmail, passwordProblem, text } from '../validate.ts'
+import { badRequest, fail, invalid, isEmail, passwordProblem, text } from '../validate.ts'
 
 export const accountRoutes = express.Router()
 
@@ -19,11 +19,11 @@ function readSignup(body: Record<string, unknown>) {
   const email = text(body.email).toLowerCase()
   const role = body.role as Role
 
-  if (!ROLES.includes(role)) return { error: 'Choose whether you are a client or a builder.' }
-  if (!name || name.length > NAME_MAX) return { error: 'Please enter your name.' }
-  if (!isEmail(email)) return { error: 'Please enter a valid email address.' }
+  if (!ROLES.includes(role)) return invalid((m) => m.account.chooseRole)
+  if (!name || name.length > NAME_MAX) return invalid((m) => m.account.enterName)
+  if (!isEmail(email)) return invalid((m) => m.account.enterEmail)
   const problem = passwordProblem(body.password)
-  if (problem) return { error: problem }
+  if (problem) return invalid(problem)
 
   return { name, email, role, password: body.password as string }
 }
@@ -35,7 +35,7 @@ accountRoutes.post('/signup', async (req, res) => {
   if (wait) return tooManyAttempts(res, wait)
 
   const input = readSignup(req.body ?? {})
-  if ('error' in input) return badRequest(res, input.error!)
+  if ('error' in input) return badRequest(res, input.error)
 
   let userId: number
   try {
@@ -46,7 +46,7 @@ accountRoutes.post('/signup', async (req, res) => {
     userId = result.insertId
   } catch (err) {
     if ((err as { code?: string }).code === 'ER_DUP_ENTRY') {
-      res.status(409).json({ error: 'An account with this email already exists. Try logging in.' })
+      fail(res, 409, (m) => m.account.emailTaken)
       return
     }
     throw err
@@ -70,7 +70,7 @@ accountRoutes.post('/login', async (req, res) => {
   const user = rows[0]
   if (!(await verifyPassword(password, user?.password_hash))) {
     limits.failedLoginsPerEmail.hit(email)
-    res.status(401).json({ error: 'Wrong email or password.' })
+    fail(res, 401, (m) => m.account.wrongLogin)
     return
   }
   limits.failedLoginsPerEmail.reset(email)
@@ -94,9 +94,9 @@ accountRoutes.put('/me', requireUser, async (req, res) => {
   const user = me(res)
   const name = text(req.body?.name)
   const phone = text(req.body?.phone)
-  if (!name || name.length > NAME_MAX) return badRequest(res, 'Please enter your name.')
+  if (!name || name.length > NAME_MAX) return badRequest(res, (m) => m.account.enterName)
   if (phone.length > PHONE_MAX || (phone && !/^[\d\s()+.-]+$/.test(phone))) {
-    return badRequest(res, 'Please enter a valid phone number, or leave it empty.')
+    return badRequest(res, (m) => m.account.enterPhone)
   }
   await db.execute('UPDATE users SET name = ?, phone = ? WHERE id = ?', [name, phone || null, user.id])
   res.json({ user: await ownAccount((await loadUser(user.id))!) })
@@ -105,7 +105,7 @@ accountRoutes.put('/me', requireUser, async (req, res) => {
 accountRoutes.put('/me/password', requireUser, async (req, res) => {
   const user = me(res)
   const current = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : ''
-  if (!(await verifyPassword(current, user.password_hash))) return badRequest(res, 'Your current password is wrong.')
+  if (!(await verifyPassword(current, user.password_hash))) return badRequest(res, (m) => m.account.wrongPassword)
   const problem = passwordProblem(req.body?.newPassword)
   if (problem) return badRequest(res, problem)
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import App from './App'
 import { api, setUnauthorizedHandler } from './api'
 import { Logo } from './components/Logo'
+import { useT } from './i18n'
 import { navigate, usePath, useSearchParams } from './router'
 import { AuthScreen } from './screens/AuthScreen'
 import { BuilderSetup } from './screens/BuilderSetup'
@@ -13,6 +14,8 @@ import type { User } from './types'
  * business profile, or the app.
  */
 export function Root() {
+  // Watching the language here means switching it re-renders everything below.
+  const t = useT()
   const path = usePath()
   const params = useSearchParams()
   // undefined while we check for an existing session.
@@ -34,7 +37,7 @@ export function Root() {
 
   if (user === undefined) {
     return (
-      <div className="splash" aria-label="Loading">
+      <div className="splash" aria-label={t.nav.loading}>
         <Logo />
       </div>
     )

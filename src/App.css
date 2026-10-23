@@ -57,7 +57,28 @@
 }
 
 .topbar__logo {
+  flex-shrink: 0;
   border-radius: var(--radius-small);
+}
+
+.logo__name {
+  white-space: nowrap;
+}
+
+/* The language menu: a globe and EN / RO / RU. */
+.language-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.language-picker .select--small {
+  min-height: 32px;
+  padding: 4px 28px 4px 8px;
+  background-position:
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
 }
 
 .nav {
@@ -111,6 +132,35 @@
 }
 
 /* On phones the menu moves to a bar along the bottom. */
+/* Tablets and small laptops: the menu keeps its place but uses the short labels (Romanian and
+   Russian ones run long), and the logo is just its mark, leaving room for the language menu. */
+@media (min-width: 861px) and (max-width: 1180px) {
+  .topbar__inner {
+    gap: 12px;
+  }
+
+  .topbar .logo__name {
+    display: none;
+  }
+
+  .nav__item {
+    gap: 6px;
+    padding: 8px 9px;
+  }
+
+  .nav__label--long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .nav__label--short {
+    display: inline;
+  }
+}
+
 @media (max-width: 860px) {
   /* A backdrop-filter would make the header the box the fixed menu is positioned in, pinning
      the menu to the header instead of the bottom of the screen. */
@@ -120,7 +170,14 @@
   }
 
   .topbar__inner {
+    position: relative;
     justify-content: center;
+  }
+
+  /* The menu moves to the bottom of the screen; the language stays in the top corner. */
+  .topbar__language {
+    position: absolute;
+    right: 16px;
   }
 
   .nav {
@@ -1321,9 +1378,18 @@ a.list__row:hover {
 /* ---------- Log in and sign up ---------- */
 
 .auth {
+  position: relative;
   min-height: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+/* The language menu, in the top corner of the page. */
+.auth__language {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1;
 }
 
 .auth__intro {
@@ -1491,6 +1557,12 @@ a.list__row:hover {
   max-width: 760px;
   margin: 0 auto;
   padding: 20px;
+}
+
+.setup__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .invite__main,

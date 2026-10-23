@@ -1,5 +1,7 @@
 import type { Response } from 'express'
 import { AMOUNT_MAX_CENTS, PASSWORD_MAX, PASSWORD_MIN } from '../shared/rules.ts'
+import { say } from './i18n/index.ts'
+import type { Text } from './i18n/index.ts'
 
 /** A trimmed string, or '' for anything that isn't a string. */
 export const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
@@ -13,11 +15,9 @@ export function isEmail(value: string): boolean {
 }
 
 /** What's wrong with a new password, or null if it's fine. */
-export function passwordProblem(password: unknown): string | null {
-  if (typeof password !== 'string' || password.length < PASSWORD_MIN) {
-    return `Your password needs at least ${PASSWORD_MIN} characters.`
-  }
-  if (password.length > PASSWORD_MAX) return 'Your password is too long.'
+export function passwordProblem(password: unknown): Text | null {
+  if (typeof password !== 'string' || password.length < PASSWORD_MIN) return (m) => m.account.passwordTooShort
+  if (password.length > PASSWORD_MAX) return (m) => m.account.passwordTooLong
   return null
 }
 
@@ -55,12 +55,15 @@ export function dateFrom(value: unknown): string | null {
   return match[0]
 }
 
-/** Answers 400 with a readable message. */
-export function badRequest(res: Response, error: string) {
-  res.status(400).json({ error })
+/** What a read* function returns when the input has a problem: { error } with the message to show. */
+export const invalid = (error: Text) => ({ error })
+
+/** Answers 400 with a readable message, in the person's language. */
+export function badRequest(res: Response, error: Text) {
+  fail(res, 400, error)
 }
 
-/** Answers with any status and a readable message. */
-export function fail(res: Response, status: number, error: string) {
-  res.status(status).json({ error })
+/** Answers with any status and a readable message, in the person's language. */
+export function fail(res: Response, status: number, error: Text) {
+  res.status(status).json({ error: say(res.req, error) })
 }

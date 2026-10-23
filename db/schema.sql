@@ -1,5 +1,7 @@
 -- Casa Fida database. Load with: mysql -uroot < db/schema.sql
--- Every amount of money is in whole cents.
+-- Every amount of money is in whole cents (or euro cents, bani, kopecks), in the currency of the
+-- job or project it belongs to. The currencies are listed in shared/money.ts (CURRENCIES).
+-- A database made before currencies were added is brought up to date by db/migrations/001-currencies.sql.
 
 CREATE DATABASE IF NOT EXISTS casa_fida CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE casa_fida;
@@ -57,8 +59,9 @@ CREATE TABLE jobs (
   description TEXT NOT NULL,
   trade VARCHAR(40) NOT NULL,
   location VARCHAR(120) NOT NULL,
-  budget_min INT UNSIGNED NULL,
-  budget_max INT UNSIGNED NULL,
+  currency CHAR(3) NOT NULL DEFAULT 'USD',
+  budget_min BIGINT UNSIGNED NULL,
+  budget_max BIGINT UNSIGNED NULL,
   timing ENUM('asap', 'within_3_months', 'within_6_months', 'flexible') NOT NULL DEFAULT 'flexible',
   -- open: taking quotes. hired: a quote was accepted. closed: the client closed it.
   status ENUM('open', 'hired', 'closed') NOT NULL DEFAULT 'open',
@@ -68,12 +71,12 @@ CREATE TABLE jobs (
   FOREIGN KEY (client_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
--- A builder's price for a job. One per builder per job; sending again updates it.
+-- A builder's price for a job, in the job's currency. One per builder per job; sending again updates it.
 CREATE TABLE quotes (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   job_id INT UNSIGNED NOT NULL,
   builder_id INT UNSIGNED NOT NULL,
-  amount INT UNSIGNED NOT NULL,
+  amount BIGINT UNSIGNED NOT NULL,
   weeks SMALLINT UNSIGNED NULL,
   message TEXT NOT NULL,
   status ENUM('pending', 'accepted', 'declined', 'withdrawn') NOT NULL DEFAULT 'pending',
@@ -97,8 +100,10 @@ CREATE TABLE projects (
   title VARCHAR(120) NOT NULL,
   description TEXT NOT NULL,
   address VARCHAR(120) NOT NULL DEFAULT '',
+  -- Every amount on the project is in this currency: from the job, or chosen for a proposal.
+  currency CHAR(3) NOT NULL DEFAULT 'USD',
   -- The price agreed at the start. Approved change orders add to it.
-  contract_amount INT UNSIGNED NOT NULL,
+  contract_amount BIGINT UNSIGNED NOT NULL,
   start_date DATE NULL,
   status ENUM('proposed', 'active', 'completed', 'declined') NOT NULL,
   job_id INT UNSIGNED NULL UNIQUE,
@@ -159,7 +164,7 @@ CREATE TABLE change_orders (
   title VARCHAR(120) NOT NULL,
   description TEXT NOT NULL,
   -- Can be negative, for work taken out.
-  amount INT NOT NULL,
+  amount BIGINT NOT NULL,
   days INT NOT NULL DEFAULT 0,
   status ENUM('pending', 'approved', 'declined', 'withdrawn') NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -175,7 +180,7 @@ CREATE TABLE invoices (
   project_id INT UNSIGNED NOT NULL,
   number SMALLINT UNSIGNED NOT NULL,
   title VARCHAR(120) NOT NULL,
-  amount INT UNSIGNED NOT NULL,
+  amount BIGINT UNSIGNED NOT NULL,
   due_date DATE NOT NULL,
   status ENUM('due', 'paid', 'void') NOT NULL DEFAULT 'due',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

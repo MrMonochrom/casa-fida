@@ -2,8 +2,10 @@
 // billing routes.
 import type { Response } from 'express'
 import type { RowDataPacket } from 'mysql2/promise'
+import type { Currency } from '../shared/money.ts'
 import { db, ms } from './db.ts'
 import { conflict, forbidden, notFound } from './errors.ts'
+import type { Text } from './i18n/index.ts'
 import { me } from './session.ts'
 
 export type ProjectStatus = 'proposed' | 'active' | 'completed' | 'declined'
@@ -17,6 +19,7 @@ export interface ProjectRow extends RowDataPacket {
   title: string
   description: string
   address: string
+  currency: Currency
   contract_amount: number
   start_date: string | null
   status: ProjectStatus
@@ -54,7 +57,7 @@ export async function loadProject(id: number | null): Promise<ProjectRow | null>
 
 export type Side = 'builder' | 'client'
 
-export const PROJECT_GONE = "This project doesn't exist."
+export const PROJECT_GONE: Text = (m) => m.projects.gone
 
 /** The project with this id, and which side of it the logged-in person is on. 404 if they're not part of it. */
 export async function projectFor(res: Response, id: unknown) {
@@ -74,13 +77,6 @@ export async function projectFor(res: Response, id: unknown) {
 /** The other person on a project, to send them live updates. */
 export const otherSide = (project: ProjectRow, side: Side) => (side === 'builder' ? project.client_id : project.builder_id)
 
-const STATUS_WORDS: Record<ProjectStatus, string> = {
-  proposed: 'still a proposal',
-  active: 'in progress',
-  completed: 'completed',
-  declined: 'declined',
-}
-
 /**
  * The project with this id, if the logged-in person is on the given side of it and it's in one of
  * the given states. Otherwise throws a 404, 403 or 409 with a readable message.
@@ -88,10 +84,11 @@ const STATUS_WORDS: Record<ProjectStatus, string> = {
 export async function projectAs(res: Response, id: unknown, side: Side, statuses: ProjectStatus[]) {
   const found = await projectFor(res, id)
   if (found.side !== side) {
-    throw forbidden(side === 'builder' ? 'Only the builder can do that.' : 'Only the client can do that.')
+    throw forbidden(side === 'builder' ? (m) => m.projects.builderOnly : (m) => m.projects.clientOnly)
   }
   if (!statuses.includes(found.project.status)) {
-    throw conflict(`You can't do that while the project is ${STATUS_WORDS[found.project.status]}.`)
+    const status = found.project.status
+    throw conflict((m) => m.projects.notWhile[status])
   }
   return found.project
 }

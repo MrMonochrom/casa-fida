@@ -1,5 +1,7 @@
-// The shapes the API sends. Amounts are whole cents; times are milliseconds since 1970 (like
-// Date.now()); dates without a time are 'YYYY-MM-DD' strings.
+// The shapes the API sends. Amounts are whole cents, in the currency of the job or project they
+// belong to; times are milliseconds since 1970 (like Date.now()); dates without a time are
+// 'YYYY-MM-DD' strings.
+import type { Currency } from '../shared/money'
 import type { JobTiming, Role, Trade } from '../shared/rules'
 
 export interface BuilderProfile {
@@ -69,6 +71,8 @@ export interface Job {
   description: string
   trade: Trade
   location: string
+  /** The budget and every quote on the job are in this currency. */
+  currency: Currency
   budgetMin: number | null
   budgetMax: number | null
   timing: JobTiming
@@ -92,6 +96,8 @@ export interface Quote {
   id: number
   jobId: number
   amount: number
+  /** The job's currency. */
+  currency: Currency
   weeks: number | null
   message: string
   status: QuoteStatus
@@ -117,6 +123,7 @@ export interface JobInput {
   description: string
   trade: Trade | ''
   location: string
+  currency: Currency
   budgetMin: number | null
   budgetMax: number | null
   timing: JobTiming
@@ -124,6 +131,8 @@ export interface JobInput {
 
 export interface QuoteInput {
   amount: number
+  /** The job's currency, as the builder saw it. */
+  currency: Currency
   weeks: number | null
   message: string
 }
@@ -139,6 +148,7 @@ export interface ProjectSummary {
   title: string
   status: ProjectStatus
   address: string
+  currency: Currency
   startDate: string | null
   createdAt: number
   builder: { id: number; name: string; businessName: string }
@@ -202,6 +212,8 @@ export interface Project {
   description: string
   address: string
   status: ProjectStatus
+  /** Every amount on the project is in this currency. */
+  currency: Currency
   startDate: string | null
   createdAt: number
   acceptedAt: number | null
@@ -233,6 +245,7 @@ export interface ProjectDetailsInput {
   description: string
   address: string
   startDate: string | null
+  currency: Currency
   contractAmount: number
 }
 

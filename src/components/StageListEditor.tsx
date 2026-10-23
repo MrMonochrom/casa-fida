@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { STAGES_MAX, STAGE_NAME_MAX, STAGE_SUGGESTIONS } from '../../shared/rules'
+import { STAGES_MAX, STAGE_NAME_MAX } from '../../shared/rules'
+import { useT } from '../i18n'
 
 interface Props {
   value: string[]
@@ -8,9 +9,10 @@ interface Props {
 
 /** Picking a new project's stages: suggestions to add with one click, your own, and their order. */
 export function StageListEditor({ value, onChange }: Props) {
+  const t = useT()
   const [custom, setCustom] = useState('')
   const full = value.length >= STAGES_MAX
-  const suggestions = STAGE_SUGGESTIONS.filter((s) => !value.includes(s))
+  const suggestions = t.stageSuggestions.filter((s) => !value.includes(s))
 
   function add(name: string) {
     const trimmed = name.trim()
@@ -27,9 +29,9 @@ export function StageListEditor({ value, onChange }: Props) {
   return (
     <fieldset className="field">
       <legend className="field__label">
-        Stages <span className="field__extra">(optional)</span>
+        {t.projects.stages} <span className="field__extra">{t.common.optional}</span>
       </legend>
-      <p className="field__hint">Your client follows the project's progress through these. You can change them later.</p>
+      <p className="field__hint">{t.projects.stagesHint}</p>
       {value.length > 0 && (
         <ol className="stage-draft">
           {value.map((name, i) => (
@@ -39,7 +41,7 @@ export function StageListEditor({ value, onChange }: Props) {
               <button
                 type="button"
                 className="icon-button"
-                aria-label={`Move ${name} up`}
+                aria-label={t.common.moveUp(name)}
                 disabled={i === 0}
                 onClick={() => move(i, -1)}
               >
@@ -48,7 +50,7 @@ export function StageListEditor({ value, onChange }: Props) {
               <button
                 type="button"
                 className="icon-button"
-                aria-label={`Move ${name} down`}
+                aria-label={t.common.moveDown(name)}
                 disabled={i === value.length - 1}
                 onClick={() => move(i, 1)}
               >
@@ -57,7 +59,7 @@ export function StageListEditor({ value, onChange }: Props) {
               <button
                 type="button"
                 className="icon-button"
-                aria-label={`Remove ${name}`}
+                aria-label={t.common.removeNamed(name)}
                 onClick={() => onChange(value.filter((s) => s !== name))}
               >
                 ×
@@ -78,8 +80,8 @@ export function StageListEditor({ value, onChange }: Props) {
       <div className="inline-form">
         <input
           className="input"
-          aria-label="Your own stage"
-          placeholder="Add your own stage"
+          aria-label={t.projects.ownStage}
+          placeholder={t.projects.addOwnStage}
           value={custom}
           maxLength={STAGE_NAME_MAX}
           disabled={full}
@@ -101,7 +103,7 @@ export function StageListEditor({ value, onChange }: Props) {
             setCustom('')
           }}
         >
-          Add
+          {t.common.add}
         </button>
       </div>
     </fieldset>

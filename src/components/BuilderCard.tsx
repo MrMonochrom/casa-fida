@@ -1,4 +1,5 @@
 import { tradeLabel } from '../format'
+import { useT } from '../i18n'
 import { Link } from './Link'
 import type { BuilderCard as Card } from '../types'
 import { Avatar, Rating } from './ui'
@@ -32,13 +33,12 @@ export function BuilderCard({ builder }: { builder: Card }) {
 
 /** Licensed, insured, years in business and finished projects, as small badges. */
 export function BuilderFacts({ builder }: { builder: Card }) {
+  const t = useT()
   const facts: string[] = []
-  if (builder.licensed) facts.push('Licensed')
-  if (builder.insured) facts.push('Insured')
-  if (builder.yearsInBusiness) facts.push(`${builder.yearsInBusiness} yrs in business`)
-  if (builder.completedProjects) {
-    facts.push(`${builder.completedProjects} project${builder.completedProjects === 1 ? '' : 's'} on Casa Fida`)
-  }
+  if (builder.licensed) facts.push(t.common.licensed)
+  if (builder.insured) facts.push(t.common.insured)
+  if (builder.yearsInBusiness) facts.push(t.builders.yearsInBusiness(builder.yearsInBusiness))
+  if (builder.completedProjects) facts.push(t.builders.projectsOnCasaFida(builder.completedProjects))
   if (facts.length === 0) return null
   return (
     <ul className="facts">

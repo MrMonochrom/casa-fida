@@ -27,7 +27,7 @@ describe('BuilderJob', () => {
     await userEvent.type(screen.getByLabelText("What's included"), 'Tile, vanity and shower.')
     await userEvent.click(screen.getByRole('button', { name: 'Send quote' }))
 
-    expect(api.sendQuote).toHaveBeenCalledWith(8, { amount: 1_850_050, weeks: 6, message: 'Tile, vanity and shower.' })
+    expect(api.sendQuote).toHaveBeenCalledWith(8, { amount: 1_850_050, currency: 'USD', weeks: 6, message: 'Tile, vanity and shower.' })
     expect(await screen.findByText('$18,500.50')).toBeInTheDocument()
     expect(screen.getByText('Waiting for an answer')).toBeInTheDocument()
   })
@@ -56,7 +56,7 @@ describe('BuilderJob', () => {
     await userEvent.clear(price)
     await userEvent.type(price, '19000')
     await userEvent.click(screen.getByRole('button', { name: 'Update quote' }))
-    expect(api.sendQuote).toHaveBeenCalledWith(8, { amount: 1_900_000, weeks: 4, message: 'Old.' })
+    expect(api.sendQuote).toHaveBeenCalledWith(8, { amount: 1_900_000, currency: 'USD', weeks: 4, message: 'Old.' })
   })
 
   it('withdraws a quote', async () => {

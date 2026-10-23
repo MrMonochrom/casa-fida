@@ -20,6 +20,7 @@ import type {
   Summary,
   User,
 } from './types'
+import { getT } from './i18n'
 
 export interface SignupInput {
   name: string
@@ -40,8 +41,6 @@ export interface InvoiceInput {
   amount: number
   dueDate: string
 }
-
-const OFFLINE = "Can't reach the server. Is it running? (npm run dev)"
 
 let onUnauthorized: (() => void) | null = null
 
@@ -64,13 +63,13 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
   try {
     res = await fetch(`/api${path}`, init)
   } catch {
-    throw new Error(OFFLINE)
+    throw new Error(getT().common.offline)
   }
   // A wrong password on the login form is also a 401, but that isn't a lost session.
   if (res.status === 401 && path !== '/login') onUnauthorized?.()
   if (res.status === 204) return undefined as T
   const data = await res.json().catch(() => null)
-  if (!res.ok) throw new Error(data?.error ?? OFFLINE)
+  if (!res.ok) throw new Error(data?.error ?? getT().common.offline)
   return data as T
 }
 

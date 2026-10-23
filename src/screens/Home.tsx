@@ -1,10 +1,10 @@
-import { formatMoney } from '../../shared/money'
 import { api } from '../api'
 import { Icon } from '../components/Icon'
 import type { IconName } from '../components/Icon'
 import { ProjectCard } from '../components/ProjectCard'
 import { Empty, Loading, PageHeader } from '../components/ui'
-import { JOB_STATUS, ago, budgetText, plural, tradeLabel } from '../format'
+import { ago, budgetText, formatMoney, jobStatus, tradeLabel } from '../format'
+import { getT, useT } from '../i18n'
 import { projectTodos } from '../projectTodos'
 import { Link } from '../components/Link'
 import { useServerEvents } from '../serverEvents'
@@ -73,7 +73,7 @@ function todosFor(user: User, data: HomeData): Todo[] {
         todos.push({
           key: `j${job.id}`,
           to: `/jobs/${job.id}`,
-          title: `${plural(job.pendingQuotes, 'quote')} to look at`,
+          title: getT().home.quotesToLookAt(job.pendingQuotes),
           detail: job.title,
           urgent: true,
         })
@@ -84,6 +84,7 @@ function todosFor(user: User, data: HomeData): Todo[] {
 }
 
 export function Home() {
+  const t = useT()
   const { user } = useSession()
   const { data, error, reload } = useResource(() => loadHome(user), `home-${user.id}`)
 
@@ -96,25 +97,20 @@ export function Home() {
 
   const actions = isClient ? (
     <div className="action-grid">
-      <ActionCard to="/jobs/new" icon="plus" title="Post a job" text="Describe the work and get quotes." />
-      <ActionCard to="/builders" icon="search" title="Find a builder" text="Browse profiles and reviews." />
+      <ActionCard to="/jobs/new" icon="plus" title={t.common.postJob} text={t.home.postJobText} />
+      <ActionCard to="/builders" icon="search" title={t.common.findBuilder} text={t.home.findBuilderText} />
     </div>
   ) : (
     <div className="action-grid">
-      <ActionCard to="/jobs" icon="briefcase" title="Find work" text="Open jobs in your trades." />
-      <ActionCard
-        to="/projects/new"
-        icon="plus"
-        title="Send a proposal"
-        text="Already agreed the work? Invite your client."
-      />
+      <ActionCard to="/jobs" icon="briefcase" title={t.common.findWork} text={t.home.findWorkText} />
+      <ActionCard to="/projects/new" icon="plus" title={t.common.sendProposal} text={t.home.sendProposalText} />
     </div>
   )
 
   if (!data) {
     return (
       <>
-        <PageHeader title={`Hi, ${firstName}`} />
+        <PageHeader title={t.home.hi(firstName)} />
         {actions}
         <Loading error={error} onRetry={reload} />
       </>
@@ -127,14 +123,14 @@ export function Home() {
   return (
     <>
       <PageHeader
-        title={`Hi, ${firstName}`}
-        subtitle={todos.length ? `${plural(todos.length, 'thing')} need${todos.length === 1 ? 's' : ''} your attention.` : "You're all caught up."}
+        title={t.home.hi(firstName)}
+        subtitle={todos.length ? t.home.attention(todos.length) : t.home.caughtUp}
       />
       {actions}
 
       {todos.length > 0 && (
         <section className="section">
-          <h2 className="section__title">Waiting for you</h2>
+          <h2 className="section__title">{t.home.waiting}</h2>
           <ul className="list card">
             {todos.map((todo) => (
               <li key={todo.key}>
@@ -156,18 +152,14 @@ export function Home() {
 
       <section className="section">
         <div className="section__header">
-          <h2 className="section__title">Current projects</h2>
+          <h2 className="section__title">{t.home.currentProjects}</h2>
           <Link to="/projects" className="text-link">
-            All projects
+            {t.home.allProjects}
           </Link>
         </div>
         {current.length === 0 ? (
-          <Empty title="No current projects.">
-            <p className="muted">
-              {isClient
-                ? 'When you hire a builder, or accept a proposal from one, the project appears here.'
-                : 'When a client accepts your quote or proposal, the project appears here.'}
-            </p>
+          <Empty title={t.home.noCurrent}>
+            <p className="muted">{isClient ? t.home.noCurrentClient : t.home.noCurrentBuilder}</p>
           </Empty>
         ) : (
           <div className="card-grid">
@@ -184,14 +176,15 @@ export function Home() {
 }
 
 function ClientJobsSection({ jobs }: { jobs: Job[] }) {
+  const t = useT()
   const open = jobs.filter((j) => j.status === 'open')
   if (open.length === 0) return null
   return (
     <section className="section">
       <div className="section__header">
-        <h2 className="section__title">Jobs taking quotes</h2>
+        <h2 className="section__title">{t.home.jobsTakingQuotes}</h2>
         <Link to="/jobs" className="text-link">
-          All jobs
+          {t.home.allJobs}
         </Link>
       </div>
       <ul className="list card">
@@ -201,10 +194,10 @@ function ClientJobsSection({ jobs }: { jobs: Job[] }) {
               <span className="list__main">
                 <strong>{job.title}</strong>
                 <span className="muted">
-                  {tradeLabel(job.trade)} · posted {ago(job.createdAt)}
+                  {tradeLabel(job.trade)} · {t.jobs.posted(ago(job.createdAt))}
                 </span>
               </span>
-              <span className="list__side">{plural(job.quoteCount, 'quote')}</span>
+              <span className="list__side">{t.counts.quotes(job.quoteCount)}</span>
             </Link>
           </li>
         ))}
@@ -214,20 +207,21 @@ function ClientJobsSection({ jobs }: { jobs: Job[] }) {
 }
 
 function BuilderWorkSection({ data }: { data: HomeData }) {
+  const t = useT()
   const fresh = (data.jobs as OpenJob[]).filter((j) => !j.myQuote).slice(0, 5)
   const pending = data.quotes.filter((q) => q.status === 'pending')
   return (
     <div className="two-col">
       <section className="section">
         <div className="section__header">
-          <h2 className="section__title">New jobs in your trades</h2>
+          <h2 className="section__title">{t.home.newJobs}</h2>
           <Link to="/jobs" className="text-link">
-            Find work
+            {t.common.findWork}
           </Link>
         </div>
         {fresh.length === 0 ? (
-          <Empty title="No new jobs right now.">
-            <p className="muted">We'll show jobs in your trades here as clients post them.</p>
+          <Empty title={t.home.noNewJobs}>
+            <p className="muted">{t.home.noNewJobsText}</p>
           </Empty>
         ) : (
           <ul className="list card">
@@ -237,7 +231,7 @@ function BuilderWorkSection({ data }: { data: HomeData }) {
                   <span className="list__main">
                     <strong>{job.title}</strong>
                     <span className="muted">
-                      {job.location} · {budgetText(job.budgetMin, job.budgetMax)}
+                      {job.location} · {budgetText(job.budgetMin, job.budgetMax, job.currency)}
                     </span>
                   </span>
                   <span className="list__side muted">{ago(job.createdAt)}</span>
@@ -249,14 +243,14 @@ function BuilderWorkSection({ data }: { data: HomeData }) {
       </section>
       <section className="section">
         <div className="section__header">
-          <h2 className="section__title">Quotes waiting for an answer</h2>
+          <h2 className="section__title">{t.home.quotesWaiting}</h2>
           <Link to="/quotes" className="text-link">
-            All quotes
+            {t.home.allQuotes}
           </Link>
         </div>
         {pending.length === 0 ? (
-          <Empty title="No quotes waiting.">
-            <p className="muted">Quotes you send appear here until the client answers.</p>
+          <Empty title={t.home.noQuotesWaiting}>
+            <p className="muted">{t.home.noQuotesWaitingText}</p>
           </Empty>
         ) : (
           <ul className="list card">
@@ -266,10 +260,10 @@ function BuilderWorkSection({ data }: { data: HomeData }) {
                   <span className="list__main">
                     <strong>{quote.job.title}</strong>
                     <span className="muted">
-                      {JOB_STATUS[quote.job.status].label} · sent {ago(quote.updatedAt)}
+                      {jobStatus(quote.job.status).label} · {t.jobs.quoteSent(ago(quote.updatedAt))}
                     </span>
                   </span>
-                  <span className="list__side">{formatMoney(quote.amount)}</span>
+                  <span className="list__side">{formatMoney(quote.amount, quote.currency)}</span>
                 </Link>
               </li>
             ))}

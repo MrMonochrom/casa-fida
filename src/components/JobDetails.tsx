@@ -1,43 +1,45 @@
-import { JOB_STATUS, ago, budgetText, timingLabel, tradeLabel } from '../format'
+import { ago, budgetText, jobStatus, timingLabel, tradeLabel } from '../format'
+import { useT } from '../i18n'
 import type { Job } from '../types'
 import { StatusPill } from './ui'
 
 /** The facts of a job and its description. */
 export function JobDetails({ job, showClient = false }: { job: Job; showClient?: boolean }) {
+  const t = useT()
   return (
     <div className="card">
       <dl className="facts-list">
         <div>
-          <dt>Kind of work</dt>
+          <dt>{t.jobs.kindOfWork}</dt>
           <dd>{tradeLabel(job.trade)}</dd>
         </div>
         <div>
-          <dt>Where</dt>
+          <dt>{t.jobs.where}</dt>
           <dd>{job.location}</dd>
         </div>
         <div>
-          <dt>Budget</dt>
-          <dd>{budgetText(job.budgetMin, job.budgetMax)}</dd>
+          <dt>{t.common.budget}</dt>
+          <dd>{budgetText(job.budgetMin, job.budgetMax, job.currency)}</dd>
         </div>
         <div>
-          <dt>Start</dt>
+          <dt>{t.common.start}</dt>
           <dd>{timingLabel(job.timing)}</dd>
         </div>
         {showClient && (
           <div>
-            <dt>Client</dt>
+            <dt>{t.jobs.client}</dt>
             <dd>{job.client.name}</dd>
           </div>
         )}
         <div>
-          <dt>Status</dt>
+          <dt>{t.jobs.status}</dt>
           <dd>
-            <StatusPill look={JOB_STATUS[job.status]} />
+            <StatusPill look={jobStatus(job.status)} />
           </dd>
         </div>
       </dl>
       <p className="prewrap job-description">{job.description}</p>
-      <p className="muted small">Posted {ago(job.createdAt)}</p>
+      <p className="muted small">{t.jobs.postedCap(ago(job.createdAt))}</p>
     </div>
   )
 }

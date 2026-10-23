@@ -1,24 +1,58 @@
 import { describe, expect, it } from 'vitest'
-import { formatChange, formatMoney, moneyInputValue, parseMoney } from './money.ts'
+import { CURRENCIES, currencySign, formatChange, formatMoney, isCurrency, moneyInputValue, parseMoney } from './money.ts'
 
 describe('formatMoney', () => {
   it('leaves out cents for whole amounts', () => {
-    expect(formatMoney(0)).toBe('$0')
-    expect(formatMoney(125_000)).toBe('$1,250')
-    expect(formatMoney(14_850_000)).toBe('$148,500')
+    expect(formatMoney(0, 'USD')).toBe('$0')
+    expect(formatMoney(125_000, 'USD')).toBe('$1,250')
+    expect(formatMoney(14_850_000, 'USD')).toBe('$148,500')
   })
 
   it('shows cents when there are some', () => {
-    expect(formatMoney(125_050)).toBe('$1,250.50')
-    expect(formatMoney(5)).toBe('$0.05')
+    expect(formatMoney(125_050, 'USD')).toBe('$1,250.50')
+    expect(formatMoney(5, 'USD')).toBe('$0.05')
+  })
+
+  // Intl puts no-break spaces in amounts.
+  const plain = (text: string) => text.replace(/\s/g, ' ')
+
+  it('writes each currency with its sign, and both kinds of lei by code', () => {
+    expect(CURRENCIES.map((c) => plain(formatMoney(125_000, c)))).toEqual([
+      '$1,250',
+      '€1,250',
+      'MDL 1,250',
+      'RON 1,250',
+      '₽1,250',
+    ])
+  })
+
+  it('writes amounts the way each language does', () => {
+    expect(plain(formatMoney(125_050, 'EUR', 'ro'))).toBe('1.250,50 €')
+    expect(plain(formatMoney(14_850_000, 'MDL', 'ro'))).toBe('148.500 MDL')
+    expect(plain(formatMoney(14_850_000, 'RUB', 'ru'))).toBe('148 500 ₽')
   })
 })
 
 describe('formatChange', () => {
   it('shows the direction of a price change', () => {
-    expect(formatChange(320_000)).toBe('+$3,200')
-    expect(formatChange(-50_000)).toBe('−$500')
-    expect(formatChange(0)).toBe('$0')
+    expect(formatChange(320_000, 'USD')).toBe('+$3,200')
+    expect(formatChange(-50_000, 'USD')).toBe('−$500')
+    expect(formatChange(0, 'USD')).toBe('$0')
+    expect(formatChange(-50_000, 'RON', 'ro').replace(/\s/g, ' ')).toBe('−500 RON')
+  })
+})
+
+describe('currencySign', () => {
+  it('is what goes in front of an amount box', () => {
+    expect(CURRENCIES.map((c) => currencySign(c))).toEqual(['$', '€', 'MDL', 'RON', '₽'])
+  })
+})
+
+describe('isCurrency', () => {
+  it('knows the currencies we take', () => {
+    expect(isCurrency('MDL')).toBe(true)
+    expect(isCurrency('GBP')).toBe(false)
+    expect(isCurrency(undefined)).toBe(false)
   })
 })
 
@@ -33,11 +67,20 @@ describe('parseMoney', () => {
     ['−500', -50_000],
     ['-0', 0],
     ['$ 10', 1000],
+    ['€15', 1500],
+    ['₽ 2 500', 250_000],
+    // A comma or a dot before the cents, as in Romanian and Russian.
+    ['1250,50', 125_050],
+    ['1.250,50', 125_050],
+    ['1 250,5', 125_050],
+    ['1,25', 125],
+    ['12.345', 1_234_500],
+    ['12,345,678.90', 1_234_567_890],
   ])('reads %j', (input, cents) => {
     expect(parseMoney(input)).toBe(cents)
   })
 
-  it.each(['', 'abc', '12.345', '1.2.3', '--5', '5-', '1e5', '.5', '99999999999999999999'])(
+  it.each(['', 'abc', '1,2345', '12,34,567', '1.2.3', '--5', '5-', '1e5', '.5', '99999999999999999999'])(
     'refuses %j',
     (input) => {
       expect(parseMoney(input)).toBeNull()

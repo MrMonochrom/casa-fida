@@ -1,6 +1,7 @@
 import express from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
-import { formatMoney } from '../../shared/money.ts'
+import type { Language } from '../../shared/languages.ts'
+import { DEFAULT_CURRENCY, isCurrency } from '../../shared/money.ts'
 import {
   DESCRIPTION_MAX,
   NAME_MAX,
@@ -14,6 +15,8 @@ import { hashToken, newSessionToken } from '../auth.ts'
 import { conversationBetween, ensureConversation } from '../conversations.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
+import { languageOf, messagesIn } from '../i18n/index.ts'
+import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
 import { appUrl, sendEmail } from '../mailer.ts'
 import { loadProject, moneyOf, projectAs, projectFor, projectSelect } from '../projects.ts'
@@ -21,7 +24,7 @@ import type { ProjectRow, Side } from '../projects.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { me, requireRole, requireUser } from '../session.ts'
 import type { UserRow } from '../users.ts'
-import { amountFrom, badRequest, dateFrom, fail, isEmail, longText, text, wholeFrom } from '../validate.ts'
+import { amountFrom, badRequest, dateFrom, fail, invalid, isEmail, longText, text, wholeFrom } from '../validate.ts'
 
 export const projectRoutes = express.Router()
 
@@ -117,6 +120,7 @@ export async function projectDetail(project: ProjectRow, side: Side) {
     description: project.description,
     address: project.address,
     status: project.status,
+    currency: project.currency,
     startDate: project.start_date,
     createdAt: Number(project.created_at),
     acceptedAt: project.accepted_at === null ? null : Number(project.accepted_at),
@@ -184,6 +188,7 @@ projectRoutes.get('/projects', requireUser, async (_req, res) => {
         title: r.title,
         status: r.status,
         address: r.address,
+        currency: r.currency,
         startDate: r.start_date,
         createdAt: Number(r.created_at),
         builder: { id: r.builder_id, name: r.builder_name, businessName: r.business_name },
@@ -212,43 +217,52 @@ function readDetails(body: Record<string, unknown>) {
   const title = text(body.title)
   const description = longText(body.description)
   const address = text(body.address)
-  if (!title || title.length > TITLE_MAX) return { error: 'Give the project a short title.' }
-  if (!description) return { error: 'Describe the work this project covers.' }
+  if (!title || title.length > TITLE_MAX) return invalid((m) => m.projects.enterTitle)
+  if (!description) return invalid((m) => m.projects.enterDescription)
   if (description.length > DESCRIPTION_MAX) {
-    return { error: `Keep the description under ${DESCRIPTION_MAX.toLocaleString('en')} characters.` }
+    return invalid((m) => m.general.descriptionTooLong)
   }
-  if (address.length > PLACE_MAX) return { error: 'That address is too long.' }
+  if (address.length > PLACE_MAX) return invalid((m) => m.projects.addressTooLong)
   let startDate: string | null = null
   if (body.startDate) {
     startDate = dateFrom(body.startDate)
-    if (!startDate) return { error: 'Please enter a valid start date.' }
+    if (!startDate) return invalid((m) => m.projects.enterStartDate)
   }
   return { title, description, address, startDate }
 }
 
 function readStageNames(value: unknown) {
   if (value == null) return { stages: [] as string[] }
-  if (!Array.isArray(value)) return { error: 'Stages should be a list of names.' }
+  if (!Array.isArray(value)) return invalid((m) => m.stages.notAList)
   const stages = [...new Set(value.map(text).filter(Boolean))]
-  if (stages.length > STAGES_MAX) return { error: `A project can have up to ${STAGES_MAX} stages.` }
-  if (stages.some((s) => s.length > STAGE_NAME_MAX)) return { error: `Keep stage names under ${STAGE_NAME_MAX} characters.` }
+  if (stages.length > STAGES_MAX) return invalid((m) => m.stages.tooMany)
+  if (stages.some((s) => s.length > STAGE_NAME_MAX)) return invalid((m) => m.stages.nameTooLong)
   return { stages }
 }
 
-async function sendProposalEmail(builder: UserRow, project: ProjectRow, to: string, link: string, isNew: boolean) {
+/** Emails the client a proposal, in the language the builder is using the app in. */
+async function sendProposalEmail(
+  builder: UserRow,
+  project: ProjectRow,
+  to: string,
+  link: string,
+  isNew: boolean,
+  language: Language,
+) {
+  const say = messagesIn(language).proposalEmail
   const from = project.business_name === builder.name ? builder.name : `${builder.name} (${project.business_name})`
   await sendEmail({
     to,
-    subject: `${project.business_name} sent you a project proposal`,
+    subject: say.subject(project.business_name),
     text: [
-      `Hi ${project.client_name},`,
+      say.greeting(project.client_name),
       '',
-      `${from} has sent you a proposal on Casa Fida:`,
+      say.sent(from),
       '',
       `  ${project.title}`,
-      `  Price: ${formatMoney(project.contract_amount)}`,
+      `  ${say.price(project.contract_amount, project.currency)}`,
       '',
-      isNew ? 'Create your free account to see the details and accept or decline it:' : 'See it and accept or decline it here:',
+      isNew ? say.signUp : say.open,
       link,
     ].join('\n'),
   })
@@ -266,34 +280,36 @@ async function newInviteLink(projectId: number) {
 projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
   const builder = me(res)
   const [profile] = await db.execute<RowDataPacket[]>('SELECT 1 FROM builder_profiles WHERE user_id = ?', [builder.id])
-  if (!profile.length) return fail(res, 409, 'Set up your business profile before sending proposals.')
+  if (!profile.length) return fail(res, 409, (m) => m.projects.needProfile)
   const wait = limits.invitesPerBuilder.retryAfter(String(builder.id))
   if (wait) return tooManyAttempts(res, wait)
 
   const body = req.body ?? {}
   const details = readDetails(body)
-  if ('error' in details) return badRequest(res, details.error!)
+  if ('error' in details) return badRequest(res, details.error)
   const amount = amountFrom(body.contractAmount)
-  if (amount === null) return badRequest(res, 'Enter the price for the work.')
+  if (amount === null) return badRequest(res, (m) => m.projects.enterPrice)
+  const currency = body.currency ?? DEFAULT_CURRENCY
+  if (!isCurrency(currency)) return badRequest(res, (m) => m.general.chooseCurrency)
   const clientName = text(body.clientName)
   const clientEmail = text(body.clientEmail).toLowerCase()
-  if (!clientName || clientName.length > NAME_MAX) return badRequest(res, "Enter your client's name.")
-  if (!isEmail(clientEmail)) return badRequest(res, "Enter your client's email address.")
-  if (clientEmail === builder.email) return badRequest(res, "Use your client's email address, not yours.")
+  if (!clientName || clientName.length > NAME_MAX) return badRequest(res, (m) => m.projects.enterClientName)
+  if (!isEmail(clientEmail)) return badRequest(res, (m) => m.projects.enterClientEmail)
+  if (clientEmail === builder.email) return badRequest(res, (m) => m.projects.notYourEmail)
   const stageNames = readStageNames(body.stages)
-  if ('error' in stageNames) return badRequest(res, stageNames.error!)
+  if ('error' in stageNames) return badRequest(res, stageNames.error)
 
   const [existing] = await db.execute<UserRow[]>('SELECT * FROM users WHERE email = ?', [clientEmail])
   const client = existing[0]
   if (client?.role === 'builder') {
-    return badRequest(res, 'That email belongs to a builder account. Proposals can only go to clients.')
+    return badRequest(res, (m) => m.projects.builderEmail)
   }
 
   const projectId = await inTransaction(async (conn) => {
     const [result] = await conn.execute<ResultSetHeader>(
       `INSERT INTO projects (builder_id, client_id, client_name, client_email, title, description, address,
-                             contract_amount, start_date, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed')`,
+                             currency, contract_amount, start_date, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed')`,
       [
         builder.id,
         client?.id ?? null,
@@ -302,6 +318,7 @@ projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
         details.title,
         details.description,
         details.address,
+        currency,
         amount,
         details.startDate,
       ],
@@ -319,31 +336,38 @@ projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
 
   const project = (await loadProject(projectId))!
   const link = client ? `${appUrl()}/projects/${projectId}` : await newInviteLink(projectId)
-  await sendProposalEmail(builder, project, clientEmail, link, !client).catch((err) =>
+  await sendProposalEmail(builder, project, clientEmail, link, !client, languageOf(req)).catch((err) =>
     console.error('Proposal email failed:', err),
   )
   publish(client?.id, { type: 'project', projectId })
   res.status(201).json({ project: await projectDetail((await loadProject(projectId))!, 'builder') })
 })
 
-// Changes a project's details. The price can only change while it's a proposal; after that,
-// changes to the price go through change orders.
+// Changes a project's details. The price and its currency can only change while it's a proposal;
+// after that, changes to the price go through change orders.
 projectRoutes.put('/projects/:id', requireRole('builder'), async (req, res) => {
   const project = await projectAs(res, req.params.id, 'builder', ['proposed', 'active'])
   const details = readDetails(req.body ?? {})
-  if ('error' in details) return badRequest(res, details.error!)
+  if ('error' in details) return badRequest(res, details.error)
   let amount = project.contract_amount
   if (req.body?.contractAmount !== undefined && req.body.contractAmount !== project.contract_amount) {
     if (project.status !== 'proposed') {
-      return fail(res, 409, 'The price is agreed. Send a change order to change it.')
+      return fail(res, 409, (m) => m.projects.priceAgreed)
     }
     const parsed = amountFrom(req.body.contractAmount)
-    if (parsed === null) return badRequest(res, 'Enter the price for the work.')
+    if (parsed === null) return badRequest(res, (m) => m.projects.enterPrice)
     amount = parsed
   }
+  let currency = project.currency
+  if (req.body?.currency !== undefined && req.body.currency !== project.currency) {
+    if (project.status !== 'proposed') return fail(res, 409, (m) => m.projects.priceAgreed)
+    if (!isCurrency(req.body.currency)) return badRequest(res, (m) => m.general.chooseCurrency)
+    currency = req.body.currency
+  }
   await db.execute(
-    'UPDATE projects SET title = ?, description = ?, address = ?, start_date = ?, contract_amount = ? WHERE id = ?',
-    [details.title, details.description, details.address, details.startDate, amount, project.id],
+    `UPDATE projects SET title = ?, description = ?, address = ?, start_date = ?, currency = ?, contract_amount = ?
+     WHERE id = ?`,
+    [details.title, details.description, details.address, details.startDate, currency, amount, project.id],
   )
   publish(project.client_id, { type: 'project', projectId: project.id })
   res.json({ project: await projectDetail((await loadProject(project.id))!, 'builder') })
@@ -361,7 +385,10 @@ projectRoutes.delete('/projects/:id', requireRole('builder'), async (req, res) =
 // The link in the first email stops working.
 projectRoutes.post('/projects/:id/invite-link', requireRole('builder'), async (req, res) => {
   const project = await projectAs(res, req.params.id, 'builder', ['proposed'])
-  if (project.client_id) return fail(res, 409, `${project.client_user_name} already has this proposal in their account.`)
+  if (project.client_id) {
+    const name = project.client_user_name ?? project.client_name
+    return fail(res, 409, (m) => m.projects.alreadyClaimed(name))
+  }
   res.json({ link: await newInviteLink(project.id) })
 })
 
@@ -373,7 +400,7 @@ projectRoutes.post('/projects/:id/accept', requireRole('client'), async (req, re
       "UPDATE projects SET status = 'active', accepted_at = NOW() WHERE id = ? AND status = 'proposed'",
       [project.id],
     )
-    if (result.affectedRows === 0) throw conflict('This proposal has changed. Please look again.')
+    if (result.affectedRows === 0) throw conflict((m) => m.projects.changed)
     await ensureConversation(project.client_id!, project.builder_id, conn)
   })
   publish(project.builder_id, { type: 'project', projectId: project.id })
@@ -401,8 +428,8 @@ projectRoutes.post('/projects/:id/review', requireRole('client'), async (req, re
   const project = await projectAs(res, req.params.id, 'client', ['completed'])
   const rating = wholeFrom(req.body?.rating, 1, 5)
   const body = longText(req.body?.body)
-  if (rating === null) return badRequest(res, 'Choose a rating from 1 to 5 stars.')
-  if (body.length > REVIEW_MAX) return badRequest(res, `Keep your review under ${REVIEW_MAX.toLocaleString('en')} characters.`)
+  if (rating === null) return badRequest(res, (m) => m.projects.chooseRating)
+  if (body.length > REVIEW_MAX) return badRequest(res, (m) => m.projects.reviewTooLong)
   try {
     await db.execute('INSERT INTO reviews (project_id, builder_id, client_id, rating, body) VALUES (?, ?, ?, ?, ?)', [
       project.id,
@@ -412,7 +439,7 @@ projectRoutes.post('/projects/:id/review', requireRole('client'), async (req, re
       body,
     ])
   } catch (err) {
-    if ((err as { code?: string }).code === 'ER_DUP_ENTRY') return fail(res, 409, "You've already reviewed this project.")
+    if ((err as { code?: string }).code === 'ER_DUP_ENTRY') return fail(res, 409, (m) => m.projects.alreadyReviewed)
     throw err
   }
   publish(project.builder_id, { type: 'project', projectId: project.id })
@@ -421,7 +448,7 @@ projectRoutes.post('/projects/:id/review', requireRole('client'), async (req, re
 
 // ---------- Invite links ----------
 
-const INVITE_GONE = 'This invite link has expired or was already used. Ask your builder for a new one.'
+const INVITE_GONE: Text = (m) => m.projects.inviteGone
 
 async function projectForToken(token: unknown) {
   const value = text(token)
@@ -454,7 +481,7 @@ projectRoutes.post('/invites/claim', requireUser, async (req, res) => {
   const project = await projectForToken(req.body?.token)
   if (!project) throw notFound(INVITE_GONE)
   if (user.role !== 'client') {
-    return fail(res, 403, 'Proposals are for client accounts. Log out and sign up as a client to accept it.')
+    return fail(res, 403, (m) => m.projects.inviteForClients)
   }
   const [result] = await db.execute<ResultSetHeader>(
     'UPDATE projects SET client_id = ?, invite_token_hash = NULL WHERE id = ? AND client_id IS NULL',

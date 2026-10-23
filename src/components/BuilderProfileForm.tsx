@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { ABOUT_MAX, BUSINESS_NAME_MAX, HEADLINE_MAX, PLACE_MAX } from '../../shared/rules'
 import type { Trade } from '../../shared/rules'
 import { api } from '../api'
+import { useT } from '../i18n'
 import type { User } from '../types'
 import { TradePicker } from './TradePicker'
 import { FormError, TextAreaField, TextField } from './ui'
@@ -15,6 +16,7 @@ interface Props {
 
 /** A builder's public business profile: what clients see in search and on their page. */
 export function BuilderProfileForm({ user, onSaved, submitLabel }: Props) {
+  const t = useT()
   const profile = user.builderProfile
   const [businessName, setBusinessName] = useState(profile?.businessName ?? '')
   const [headline, setHeadline] = useState(profile?.headline ?? '')
@@ -32,7 +34,7 @@ export function BuilderProfileForm({ user, onSaved, submitLabel }: Props) {
     e.preventDefault()
     const yearsText = years.trim()
     if (yearsText && !/^\d+$/.test(yearsText)) {
-      setError('Years in business should be a whole number.')
+      setError(t.profileForm.yearsWhole)
       return
     }
     setBusy(true)
@@ -61,7 +63,7 @@ export function BuilderProfileForm({ user, onSaved, submitLabel }: Props) {
   return (
     <form className="form" onSubmit={handleSubmit} noValidate>
       <TextField
-        label="Business name"
+        label={t.profileForm.businessName}
         value={businessName}
         onChange={setBusinessName}
         maxLength={BUSINESS_NAME_MAX}
@@ -69,35 +71,35 @@ export function BuilderProfileForm({ user, onSaved, submitLabel }: Props) {
         required
       />
       <TextField
-        label="Headline"
-        extra="(optional)"
+        label={t.profileForm.headline}
+        extra={t.common.optional}
         value={headline}
         onChange={setHeadline}
         maxLength={HEADLINE_MAX}
-        placeholder="Kitchens and bathrooms, designed and built by one team."
-        hint="One line under your name in search results."
+        placeholder={t.profileForm.headlinePlaceholder}
+        hint={t.profileForm.headlineHint}
       />
       <TextAreaField
-        label="About your business"
+        label={t.profileForm.about}
         value={about}
         onChange={setAbout}
         maxLength={ABOUT_MAX}
         rows={5}
-        placeholder="Your team, how you work, what clients can expect."
+        placeholder={t.profileForm.aboutPlaceholder}
         required
       />
       <div className="form-row">
         <TextField
-          label="Area you work in"
+          label={t.profileForm.area}
           value={serviceArea}
           onChange={setServiceArea}
           maxLength={PLACE_MAX}
-          placeholder="Denver, CO"
+          placeholder={t.common.placePlaceholder}
           required
         />
         <TextField
-          label="Years in business"
-          extra="(optional)"
+          label={t.profileForm.years}
+          extra={t.common.optional}
           value={years}
           onChange={setYears}
           inputMode="numeric"
@@ -106,29 +108,29 @@ export function BuilderProfileForm({ user, onSaved, submitLabel }: Props) {
       <TradePicker value={trades} onChange={setTrades} />
       <div className="form-row">
         <TextField
-          label="License number"
-          extra="(optional)"
+          label={t.profileForm.license}
+          extra={t.common.optional}
           value={licenseNumber}
           onChange={setLicenseNumber}
           maxLength={60}
-          hint="Clients see a “Licensed” badge."
+          hint={t.profileForm.licenseHint}
         />
         <div className="field field--checkbox">
           <label className="checkbox">
             <input type="checkbox" checked={insured} onChange={(e) => setInsured(e.target.checked)} />
-            <span>We carry liability insurance</span>
+            <span>{t.profileForm.insured}</span>
           </label>
         </div>
       </div>
       <FormError error={error} />
       {saved && !error && (
         <p className="form-success" role="status">
-          Saved.
+          {t.common.saved}
         </p>
       )}
       <div className="form-actions form-actions--start">
         <button type="submit" className="button button--primary" disabled={busy}>
-          {busy ? 'Saving…' : submitLabel}
+          {busy ? t.common.saving : submitLabel}
         </button>
       </div>
     </form>

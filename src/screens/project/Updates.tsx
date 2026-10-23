@@ -7,6 +7,7 @@ import { Dialog } from '../../components/Dialog'
 import { Icon } from '../../components/Icon'
 import { Avatar, Empty, FormError, Loading } from '../../components/ui'
 import { ago, dateText } from '../../format'
+import { useT } from '../../i18n'
 import { resizeImage } from '../../resizeImage'
 import { useSession } from '../../session'
 import type { Project, ProjectUpdate } from '../../types'
@@ -20,6 +21,7 @@ interface Props {
 
 /** Progress posts from the builder, with photos, newest first. */
 export function Updates({ project, updates, error, onReload }: Props) {
+  const t = useT()
   const { user } = useSession()
   const [deleting, setDeleting] = useState<ProjectUpdate | null>(null)
   const [photo, setPhoto] = useState<string | null>(null)
@@ -31,12 +33,8 @@ export function Updates({ project, updates, error, onReload }: Props) {
       {!updates ? (
         <Loading error={error} onRetry={onReload} />
       ) : updates.length === 0 ? (
-        <Empty title="No updates yet.">
-          <p className="muted">
-            {canPost
-              ? 'Post progress and photos here. Your client sees them straight away.'
-              : 'Your builder posts progress and photos here as the work goes on.'}
-          </p>
+        <Empty title={t.updates.noneYet}>
+          <p className="muted">{canPost ? t.updates.noneBuilder : t.updates.noneClient}</p>
         </Empty>
       ) : (
         <ol className="updates">
@@ -55,7 +53,7 @@ export function Updates({ project, updates, error, onReload }: Props) {
                   <button
                     type="button"
                     className="icon-button update__delete"
-                    aria-label="Delete this update"
+                    aria-label={t.updates.deleteLabel}
                     onClick={() => setDeleting(update)}
                   >
                     ×
@@ -67,7 +65,7 @@ export function Updates({ project, updates, error, onReload }: Props) {
                 <div className="photos">
                   {update.photos.map((p, i) => (
                     <button key={p.id} type="button" className="photo" onClick={() => setPhoto(p.url)}>
-                      <img src={p.url} alt={`Photo ${i + 1} of ${update.photos.length}`} loading="lazy" />
+                      <img src={p.url} alt={t.updates.photoAlt(i + 1, update.photos.length)} loading="lazy" />
                     </button>
                   ))}
                 </div>
@@ -79,9 +77,9 @@ export function Updates({ project, updates, error, onReload }: Props) {
 
       {deleting && (
         <ConfirmDialog
-          title="Delete this update?"
-          message="It's removed for your client too, with its photos."
-          confirmLabel="Delete update"
+          title={t.updates.deleteTitle}
+          message={t.updates.deleteText}
+          confirmLabel={t.updates.deleteUpdate}
           danger
           onConfirm={async () => {
             await api.deleteUpdate(deleting.id)
@@ -92,7 +90,7 @@ export function Updates({ project, updates, error, onReload }: Props) {
         />
       )}
       {photo && (
-        <Dialog title="Photo" onClose={() => setPhoto(null)} wide>
+        <Dialog title={t.updates.photo} onClose={() => setPhoto(null)} wide>
           <img className="photo-full" src={photo} alt="" />
         </Dialog>
       )}
@@ -106,6 +104,7 @@ interface Picked {
 }
 
 function UpdateComposer({ project, onPosted }: { project: Project; onPosted: () => void }) {
+  const t = useT()
   const [body, setBody] = useState('')
   const inProgress = project.stages.find((s) => s.status === 'in_progress')
   const [stageId, setStageId] = useState<string>(inProgress ? String(inProgress.id) : '')
@@ -129,18 +128,18 @@ function UpdateComposer({ project, onPosted }: { project: Project; onPosted: () 
     if (!files) return
     const room = PHOTOS_PER_UPDATE - photos.length
     const chosen = [...files].filter((f) => f.type.startsWith('image/')).slice(0, room)
-    if (files.length > room) setError(`An update can have up to ${PHOTOS_PER_UPDATE} photos.`)
+    if (files.length > room) setError(t.updates.tooManyPhotos(PHOTOS_PER_UPDATE))
     setPhotos([...photos, ...chosen.map((file) => ({ file, preview: URL.createObjectURL(file) }))])
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!body.trim()) {
-      setError('Write a few words about the progress.')
+      setError(t.updates.writeSomething)
       return
     }
     setError(null)
-    setStatus('Posting…')
+    setStatus(t.common.posting)
     let update: ProjectUpdate
     try {
       update = await api.postUpdate(project.id, body, stageId ? Number(stageId) : null)
@@ -152,11 +151,11 @@ function UpdateComposer({ project, onPosted }: { project: Project; onPosted: () 
     // The update is posted; now its photos, one at a time.
     let photoError: string | null = null
     for (const [i, picked] of photos.entries()) {
-      setStatus(`Uploading photo ${i + 1} of ${photos.length}…`)
+      setStatus(t.updates.uploading(i + 1, photos.length))
       try {
         await api.addPhoto(update.id, await resizeImage(picked.file))
       } catch (err) {
-        photoError = `Your update is posted, but a photo didn't upload: ${(err as Error).message}`
+        photoError = t.updates.photoFailed((err as Error).message)
       }
     }
     for (const picked of photos) URL.revokeObjectURL(picked.preview)
@@ -172,14 +171,14 @@ function UpdateComposer({ project, onPosted }: { project: Project; onPosted: () 
   return (
     <form className="card form composer" onSubmit={handleSubmit}>
       <label className="field__label" htmlFor="update-body">
-        Post an update
+        {t.updates.postAnUpdate}
       </label>
       <textarea
         id="update-body"
         className="input textarea"
         rows={3}
         maxLength={UPDATE_MAX}
-        placeholder="What got done, what's next, anything your client should know."
+        placeholder={t.updates.placeholder}
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
@@ -187,11 +186,11 @@ function UpdateComposer({ project, onPosted }: { project: Project; onPosted: () 
         <div className="photos photos--small">
           {photos.map((p, i) => (
             <div key={p.preview} className="photo">
-              <img src={p.preview} alt={`New photo ${i + 1}`} />
+              <img src={p.preview} alt={t.updates.newPhoto(i + 1)} />
               <button
                 type="button"
                 className="photo__remove"
-                aria-label={`Remove photo ${i + 1}`}
+                aria-label={t.updates.removePhoto(i + 1)}
                 onClick={() => remove(p)}
                 disabled={busy}
               >
@@ -203,7 +202,7 @@ function UpdateComposer({ project, onPosted }: { project: Project; onPosted: () 
       )}
       <div className="composer__bar">
         <label className={`button button--ghost ${photos.length >= PHOTOS_PER_UPDATE || busy ? 'button--disabled' : ''}`}>
-          <Icon name="camera" size={18} /> Add photos
+          <Icon name="camera" size={18} /> {t.updates.addPhotos}
           <input
             type="file"
             accept="image/*"
@@ -219,11 +218,11 @@ function UpdateComposer({ project, onPosted }: { project: Project; onPosted: () 
         {project.stages.length > 0 && (
           <select
             className="input select select--small"
-            aria-label="Stage this update is about"
+            aria-label={t.updates.stageLabel}
             value={stageId}
             onChange={(e) => setStageId(e.target.value)}
           >
-            <option value="">No particular stage</option>
+            <option value="">{t.updates.noStage}</option>
             {project.stages.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -232,7 +231,7 @@ function UpdateComposer({ project, onPosted }: { project: Project; onPosted: () 
           </select>
         )}
         <button type="submit" className="button button--primary composer__post" disabled={busy}>
-          {status ?? 'Post update'}
+          {status ?? t.updates.postUpdate}
         </button>
       </div>
       <FormError error={error} />

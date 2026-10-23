@@ -5,6 +5,8 @@ import type { NextFunction, Request, Response } from 'express'
 import helmet from 'helmet'
 import { db } from './db.ts'
 import { HttpError } from './errors.ts'
+import { say } from './i18n/index.ts'
+import type { Text } from './i18n/index.ts'
 import { accountRoutes } from './routes/account.ts'
 import { billingRoutes } from './routes/billing.ts'
 import { builderRoutes } from './routes/builders.ts'
@@ -75,8 +77,8 @@ export function createApp(options: AppOptions = defaults) {
     messageRoutes,
     liveRoutes,
   )
-  app.use('/api', (_req, res) => {
-    res.status(404).json({ error: 'Not found.' })
+  app.use('/api', (req, res) => {
+    res.status(404).json({ error: say(req, (m) => m.general.notFound) })
   })
 
   if (options.production) {
@@ -98,18 +100,18 @@ export function createApp(options: AppOptions = defaults) {
     })
   }
 
-  app.use((err: { status?: number; code?: string }, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: { status?: number; code?: string }, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof HttpError) {
-      res.status(err.status).json({ error: err.message })
+      res.status(err.status).json({ error: say(req, err.text) })
       return
     }
     const status = err.status && err.status < 500 ? err.status : 500
     if (status === 500) console.error(err)
-    let message = 'Invalid request.'
-    if (err.code === 'ECONNREFUSED') message = "Can't reach the database. Start it with: npm run db:start"
-    else if (status === 413) message = 'That file is too big.'
-    else if (status === 500) message = 'Something went wrong on our side. Please try again.'
-    res.status(status).json({ error: message })
+    let message: Text = (m) => m.general.invalidRequest
+    if (err.code === 'ECONNREFUSED') message = (m) => m.general.noDatabase
+    else if (status === 413) message = (m) => m.general.fileTooBig
+    else if (status === 500) message = (m) => m.general.serverError
+    res.status(status).json({ error: say(req, message) })
   })
 
   return app

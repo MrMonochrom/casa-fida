@@ -1,33 +1,34 @@
 import { useState } from 'react'
-import { formatMoney } from '../../shared/money'
-import { TRADES, TRADE_KEYS } from '../../shared/rules'
+import { TRADE_KEYS } from '../../shared/rules'
 import type { Trade } from '../../shared/rules'
 import { api } from '../api'
 import { Empty, Loading, PageHeader, StatusPill } from '../components/ui'
-import { JOB_STATUS, QUOTE_STATUS, ago, budgetText, plural, timingLabel, tradeLabel } from '../format'
+import { ago, budgetText, formatMoney, jobStatus, quoteStatus, timingLabel, tradeLabel } from '../format'
+import { useT } from '../i18n'
 import { Link } from '../components/Link'
 import { useServerEvents } from '../serverEvents'
 import { useResource } from '../useResource'
 
 /** A builder's work: open jobs to quote on, and the quotes they've sent. */
 export function FindWork({ tab }: { tab: 'jobs' | 'quotes' }) {
+  const t = useT()
   return (
     <>
       <PageHeader
-        title="Find work"
-        subtitle="Jobs clients have posted, and the quotes you've sent."
+        title={t.common.findWork}
+        subtitle={t.work.subtitle}
         actions={
           <Link to="/projects/new" className="button button--secondary">
-            Send a proposal
+            {t.common.sendProposal}
           </Link>
         }
       />
-      <nav className="tabs" aria-label="Find work">
+      <nav className="tabs" aria-label={t.common.findWork}>
         <Link to="/jobs" className={`tabs__tab ${tab === 'jobs' ? 'tabs__tab--active' : ''}`} aria-current={tab === 'jobs' ? 'page' : undefined}>
-          Open jobs
+          {t.work.openJobs}
         </Link>
         <Link to="/quotes" className={`tabs__tab ${tab === 'quotes' ? 'tabs__tab--active' : ''}`} aria-current={tab === 'quotes' ? 'page' : undefined}>
-          My quotes
+          {t.work.myQuotes}
         </Link>
       </nav>
       {tab === 'jobs' ? <OpenJobs /> : <MyQuotes />}
@@ -36,6 +37,7 @@ export function FindWork({ tab }: { tab: 'jobs' | 'quotes' }) {
 }
 
 function OpenJobs() {
+  const t = useT()
   const [trade, setTrade] = useState<Trade | 'mine' | ''>('mine')
   const { data: jobs, error, reload } = useResource(() => api.openJobs(trade), trade)
 
@@ -48,15 +50,15 @@ function OpenJobs() {
       <div className="filters">
         <select
           className="input select"
-          aria-label="Show jobs for"
+          aria-label={t.work.showJobsFor}
           value={trade}
           onChange={(e) => setTrade(e.target.value as Trade | 'mine' | '')}
         >
-          <option value="mine">Your trades</option>
-          <option value="">All trades</option>
+          <option value="mine">{t.work.yourTrades}</option>
+          <option value="">{t.work.allTrades}</option>
           {TRADE_KEYS.map((key) => (
             <option key={key} value={key}>
-              {TRADES[key]}
+              {t.trades[key]}
             </option>
           ))}
         </select>
@@ -64,10 +66,8 @@ function OpenJobs() {
       {!jobs ? (
         <Loading error={error} onRetry={reload} />
       ) : jobs.length === 0 ? (
-        <Empty title="No open jobs here right now.">
-          <p className="muted">
-            {trade === 'mine' ? 'Try "All trades", or check back soon.' : 'Check back soon: clients post new jobs every day.'}
-          </p>
+        <Empty title={t.work.noOpenJobs}>
+          <p className="muted">{trade === 'mine' ? t.work.noOpenJobsMine : t.work.noOpenJobsAll}</p>
         </Empty>
       ) : (
         <div className="card-grid">
@@ -75,7 +75,7 @@ function OpenJobs() {
             <Link key={job.id} to={`/jobs/${job.id}`} className="card card--link job-card">
               <div className="job-card__top">
                 <h3 className="card__title">{job.title}</h3>
-                {job.myQuote && <StatusPill look={{ label: 'Quoted', tone: 'success' }} />}
+                {job.myQuote && <StatusPill look={{ label: t.status.quoted, tone: 'success' }} />}
               </div>
               <p className="muted">
                 {tradeLabel(job.trade)} · {job.location}
@@ -83,16 +83,16 @@ function OpenJobs() {
               <p className="job-card__description">{job.description}</p>
               <dl className="job-card__facts">
                 <div>
-                  <dt>Budget</dt>
-                  <dd>{budgetText(job.budgetMin, job.budgetMax)}</dd>
+                  <dt>{t.common.budget}</dt>
+                  <dd>{budgetText(job.budgetMin, job.budgetMax, job.currency)}</dd>
                 </div>
                 <div>
-                  <dt>Start</dt>
+                  <dt>{t.common.start}</dt>
                   <dd>{timingLabel(job.timing)}</dd>
                 </div>
               </dl>
               <p className="muted small">
-                {job.client.name} · posted {ago(job.createdAt)} · {plural(job.quoteCount, 'quote')} so far
+                {job.client.name} · {t.jobs.posted(ago(job.createdAt))} · {t.work.quotesSoFar(job.quoteCount)}
               </p>
             </Link>
           ))}
@@ -103,6 +103,7 @@ function OpenJobs() {
 }
 
 function MyQuotes() {
+  const t = useT()
   const { data: quotes, error, reload } = useResource(() => api.myQuotes(), 'my-quotes')
 
   useServerEvents((event) => {
@@ -112,8 +113,8 @@ function MyQuotes() {
   if (!quotes) return <Loading error={error} onRetry={reload} />
   if (quotes.length === 0) {
     return (
-      <Empty title="You haven't sent any quotes yet.">
-        <p className="muted">Open a job to send the client your price.</p>
+      <Empty title={t.work.noQuotesSent}>
+        <p className="muted">{t.work.noQuotesSentText}</p>
       </Empty>
     )
   }
@@ -125,13 +126,13 @@ function MyQuotes() {
             <span className="list__main">
               <strong>{quote.job.title}</strong>
               <span className="muted">
-                {quote.job.location} · job {JOB_STATUS[quote.job.status].label.toLowerCase()} · sent{' '}
-                {ago(quote.updatedAt)}
+                {quote.job.location} · {t.work.jobStatus(jobStatus(quote.job.status).label)} ·{' '}
+                {t.jobs.quoteSent(ago(quote.updatedAt))}
               </span>
             </span>
             <span className="list__side">
-              <strong>{formatMoney(quote.amount)}</strong>
-              <StatusPill look={QUOTE_STATUS[quote.status]} />
+              <strong>{formatMoney(quote.amount, quote.currency)}</strong>
+              <StatusPill look={quoteStatus(quote.status)} />
             </span>
           </Link>
         </li>
