@@ -4,7 +4,7 @@ import { db } from './db.ts'
 import { hashToken, newSessionToken } from './auth.ts'
 import type { UserRow } from './users.ts'
 
-const SESSION_COOKIE = 'bb_session'
+const SESSION_COOKIE = 'cf_session'
 const SESSION_DAYS = 30
 
 /** The session token from the request's cookie, if any. */

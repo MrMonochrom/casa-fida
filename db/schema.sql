@@ -1,8 +1,8 @@
--- BuildBridge database. Load with: mysql -uroot < db/schema.sql
+-- Casa Fida database. Load with: mysql -uroot < db/schema.sql
 -- Every amount of money is in whole cents.
 
-CREATE DATABASE IF NOT EXISTS buildbridge CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-USE buildbridge;
+CREATE DATABASE IF NOT EXISTS casa_fida CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE casa_fida;
 
 -- Everyone who can log in: clients (homeowners) and builders.
 CREATE TABLE users (

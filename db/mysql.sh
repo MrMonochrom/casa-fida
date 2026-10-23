@@ -1,6 +1,6 @@
 #!/bin/sh
-# Runs a local MySQL server for BuildBridge without installing anything system-wide.
-# Its data lives in ~/.buildbridge (set BUILDBRIDGE_MYSQL_DIR to change it), on port 3307, so it
+# Runs a local MySQL server for Casa Fida without installing anything system-wide.
+# Its data lives in ~/.casa-fida (set CASA_FIDA_MYSQL_DIR to change it), on port 3307, so it
 # never touches another app's database. If Be in touch's copy of MySQL is already downloaded in
 # ~/.be-in-touch, it's used instead of downloading another one.
 # To remove everything, stop the server and delete that folder.
@@ -10,12 +10,12 @@ set -eu
 
 VERSION=8.4.13
 PACKAGE="mysql-$VERSION-macos15-arm64"
-DIR="${BUILDBRIDGE_MYSQL_DIR:-$HOME/.buildbridge}"
+DIR="${CASA_FIDA_MYSQL_DIR:-$HOME/.casa-fida}"
 DATA="$DIR/data"
 SOCK="$DIR/mysql.sock"
 PIDFILE="$DIR/mysqld.pid"
 LOG="$DIR/mysqld.log"
-PORT="${BUILDBRIDGE_MYSQL_PORT:-3307}"
+PORT="${CASA_FIDA_MYSQL_PORT:-3307}"
 DB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Our own copy if there is one, otherwise Be in touch's, otherwise our own (downloaded on start).
@@ -87,7 +87,7 @@ start() {
     client < "$DB_DIR/schema.sql"
     client < "$DB_DIR/seed.sql"
   fi
-  echo "MySQL is running on 127.0.0.1:$PORT (database buildbridge, user root, no password)."
+  echo "MySQL is running on 127.0.0.1:$PORT (database casa_fida, user root, no password)."
 }
 
 stop() {
@@ -107,7 +107,7 @@ case "${1:-}" in
     ;;
   users)
     require_running
-    client buildbridge --table -e "
+    client casa_fida --table -e "
       SELECT u.id, u.role, u.name, u.email, b.business_name, b.service_area,
              GROUP_CONCAT(t.trade ORDER BY t.trade SEPARATOR ', ') AS trades
       FROM users u
@@ -118,7 +118,7 @@ case "${1:-}" in
     ;;
   shell)
     require_running
-    client buildbridge
+    client casa_fida
     ;;
   reset)
     printf 'This deletes every account, job, project and message and reloads the sample data. Type "yes" to continue: '

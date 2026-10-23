@@ -23,7 +23,7 @@ describe('POST /api/signup', () => {
       memberSince: expect.any(Number),
       builderProfile: null,
     })
-    expect(res.headers['set-cookie'][0]).toMatch(/^bb_session=.+HttpOnly/)
+    expect(res.headers['set-cookie'][0]).toMatch(/^cf_session=.+HttpOnly/)
     expect((await agent.get('/api/me')).body.user.email).toBe('ana@example.com')
   })
 
@@ -115,8 +115,8 @@ describe('GET /api/me and POST /api/logout', () => {
   })
 
   it('ignores a damaged or unknown cookie', async () => {
-    expect((await newAgent().get('/api/me').set('Cookie', 'bb_session=%E0%A4%A')).body).toEqual({ user: null })
-    expect((await newAgent().get('/api/me').set('Cookie', 'other=1; bb_session=made-up')).body).toEqual({ user: null })
+    expect((await newAgent().get('/api/me').set('Cookie', 'cf_session=%E0%A4%A')).body).toEqual({ user: null })
+    expect((await newAgent().get('/api/me').set('Cookie', 'other=1; cf_session=made-up')).body).toEqual({ user: null })
   })
 
   it('logs out and forgets the session', async () => {

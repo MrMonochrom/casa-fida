@@ -162,7 +162,7 @@ export function Money({ project, onChange }: Props) {
         </div>
         <p className="section__intro muted">
           {isBuilder
-            ? 'Payment happens outside BuildBridge. Mark an invoice paid when the money arrives.'
+            ? 'Payment happens outside Casa Fida. Mark an invoice paid when the money arrives.'
             : 'Pay your builder the way you agreed. They mark each invoice paid when the money arrives.'}
         </p>
         {project.invoices.length === 0 ? (

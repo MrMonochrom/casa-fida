@@ -1,8 +1,8 @@
--- Sample data for trying BuildBridge locally. Every account's password is BuildBridge123.
+-- Sample data for trying Casa Fida locally. Every account's password is CasaFida123.
 -- Dates are relative to when this runs, so the data always looks recent.
-USE buildbridge;
+USE casa_fida;
 
-SET @pw = 'scrypt$5a71c006438fb2612c0ee7d65030d804$b2d0a949b7331b228f6c37f790c639edf05f301c9e07427050bb0655a5cb94d56f4b8c16dbb574ee36e9c88ddf2ec4cfea9902185ea0cdb4ad751d4d90dc3f24';
+SET @pw = 'scrypt$5174647e2f5d44f576c4f99b1329ebf5$8e07b38709b283ac3d2ea80d993619263a07094d12078673b65c2b63f236cf4c3549e7edf8e3d9539c235138262141b2caa9abe43a2ab23982b4c6634c314c4d';
 
 -- ---------- People ----------
 
@@ -213,7 +213,7 @@ INSERT INTO messages (conversation_id, sender_id, body, sent_at, read_at) VALUES
   (2, 2, 'Yes, it is: the price covers the mat, the thermostat and the wiring to it.', NOW() - INTERVAL 3 DAY, NOW() - INTERVAL 2 DAY),
   (3, 8, 'Hi, we''re looking to redo our kitchen. Would you be able to take a look?', NOW() - INTERVAL 5 DAY, NOW() - INTERVAL 5 DAY),
   (3, 2, 'Happy to! I can stop by Saturday morning.', NOW() - INTERVAL 5 DAY, NOW() - INTERVAL 5 DAY),
-  (3, 2, 'Great to meet you both on Saturday. I''ve sent the proposal through BuildBridge, so you can accept it there.', NOW() - INTERVAL 1 DAY, NULL),
+  (3, 2, 'Great to meet you both on Saturday. I''ve sent the proposal through Casa Fida, so you can accept it there.', NOW() - INTERVAL 1 DAY, NULL),
   (4, 4, 'Thanks for posting your deck job! Do you know if the current footings are in good shape?', NOW() - INTERVAL 6 DAY, NOW() - INTERVAL 6 DAY),
   (4, 8, 'Not sure, they''re about 20 years old.', NOW() - INTERVAL 6 DAY, NOW() - INTERVAL 6 DAY),
   (4, 4, 'No problem, I''ve included new footings in my quote to be safe.', NOW() - INTERVAL 5 DAY, NOW() - INTERVAL 5 DAY),

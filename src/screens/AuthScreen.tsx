@@ -18,7 +18,7 @@ const ROLE_CHOICES: { role: Role; title: string; text: string }[] = [
   { role: 'builder', title: "I'm a builder", text: 'Find work, send proposals and keep clients updated.' },
 ]
 
-/** Log in or sign up. Without an invite, it also says what BuildBridge is. */
+/** Log in or sign up. Without an invite, it also says what Casa Fida is. */
 export function AuthScreen({ onAuthenticated, invite }: Props) {
   const [mode, setMode] = useState<'login' | 'signup'>(invite ? 'signup' : 'login')
   const [role, setRole] = useState<Role | null>(invite ? 'client' : null)
@@ -59,7 +59,7 @@ export function AuthScreen({ onAuthenticated, invite }: Props) {
 
       {mode === 'signup' && !invite && (
         <fieldset className="role-choice">
-          <legend className="field__label">How will you use BuildBridge?</legend>
+          <legend className="field__label">How will you use Casa Fida?</legend>
           {ROLE_CHOICES.map((choice) => (
             <label key={choice.role} className={`role-option ${role === choice.role ? 'role-option--on' : ''}`}>
               <input
@@ -99,7 +99,7 @@ export function AuthScreen({ onAuthenticated, invite }: Props) {
       <p className="auth-card__switch">
         {mode === 'login' ? (
           <>
-            New to BuildBridge?{' '}
+            New to Casa Fida?{' '}
             <button type="button" className="text-button" onClick={() => switchMode('signup')}>
               Create an account
             </button>
@@ -141,7 +141,7 @@ export function AuthScreen({ onAuthenticated, invite }: Props) {
         {import.meta.env.DEV && (
           <p className="auth__demo">
             Trying it locally? Log in as <code>emma.clarke@example.com</code> (client) or{' '}
-            <code>marcus.reid@example.com</code> (builder), password <code>BuildBridge123</code>.
+            <code>marcus.reid@example.com</code> (builder), password <code>CasaFida123</code>.
           </p>
         )}
       </section>

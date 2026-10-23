@@ -44,7 +44,7 @@ export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave,
         <h1 className="invite-card__title">This link doesn't work any more</h1>
         <p>{loadError}</p>
         <button type="button" className="button button--primary" onClick={onLeave}>
-          Go to BuildBridge
+          Go to Casa Fida
         </button>
       </div>
     )
@@ -58,7 +58,7 @@ export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave,
         <p>
           <strong>{invite.businessName}</strong>
           {invite.builderName !== invite.businessName && ` (${invite.builderName})`} sent you a proposal on
-          BuildBridge. {user ? '' : 'Create a free account to see the price and details, and accept or decline it.'}
+          Casa Fida. {user ? '' : 'Create a free account to see the price and details, and accept or decline it.'}
         </p>
       </div>
     )
@@ -87,7 +87,7 @@ export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave,
         <div className="invite-card">
           <FormError error={claimError} />
           <button type="button" className="button button--secondary" onClick={onLeave}>
-            Go to BuildBridge
+            Go to Casa Fida
           </button>
         </div>
       )

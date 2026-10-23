@@ -37,7 +37,7 @@ export function BuilderFacts({ builder }: { builder: Card }) {
   if (builder.insured) facts.push('Insured')
   if (builder.yearsInBusiness) facts.push(`${builder.yearsInBusiness} yrs in business`)
   if (builder.completedProjects) {
-    facts.push(`${builder.completedProjects} project${builder.completedProjects === 1 ? '' : 's'} on BuildBridge`)
+    facts.push(`${builder.completedProjects} project${builder.completedProjects === 1 ? '' : 's'} on Casa Fida`)
   }
   if (facts.length === 0) return null
   return (

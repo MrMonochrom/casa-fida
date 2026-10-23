@@ -28,7 +28,7 @@ describe('Root', () => {
     expect(screen.queryByLabelText('Loading')).not.toBeInTheDocument()
   })
 
-  it('shows log in, with what BuildBridge is, when logged out', async () => {
+  it('shows log in, with what Casa Fida is, when logged out', async () => {
     render(<Root />)
     expect(await showsLogin()).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /Builders and their clients/ })).toBeInTheDocument()
@@ -191,7 +191,7 @@ describe('invite links', () => {
     visit('/invite?token=old')
     render(<Root />)
     expect(await screen.findByText(/has expired or was already used/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Go to BuildBridge' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Go to Casa Fida' }))
     expect(window.location.pathname).toBe('/')
     expect(await showsLogin()).toBeInTheDocument()
   })

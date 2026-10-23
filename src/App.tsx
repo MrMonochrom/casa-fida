@@ -149,7 +149,7 @@ export default function App({ user, onUserChange, onLogout }: Props) {
       <div className="app">
         <header className="topbar">
           <div className="topbar__inner">
-            <Link to="/" className="topbar__logo" aria-label="BuildBridge home">
+            <Link to="/" className="topbar__logo" aria-label="Casa Fida home">
               <Logo small />
             </Link>
             <nav className="nav" aria-label="Main">

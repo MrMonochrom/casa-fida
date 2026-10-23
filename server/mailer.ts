@@ -15,7 +15,7 @@ export const outbox: Email[] = []
 // Any SMTP provider works, for example smtps://user:password@smtp.example.com:465
 const transport = process.env.SMTP_URL ? nodemailer.createTransport(process.env.SMTP_URL) : null
 // || rather than ??: an empty setting (as Docker Compose passes for unset ones) counts as unset.
-const from = process.env.MAIL_FROM || 'BuildBridge <no-reply@buildbridge.local>'
+const from = process.env.MAIL_FROM || 'Casa Fida <no-reply@casafida.local>'
 
 export async function sendEmail(email: Email) {
   if (transport) {

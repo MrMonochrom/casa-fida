@@ -243,7 +243,7 @@ async function sendProposalEmail(builder: UserRow, project: ProjectRow, to: stri
     text: [
       `Hi ${project.client_name},`,
       '',
-      `${from} has sent you a proposal on BuildBridge:`,
+      `${from} has sent you a proposal on Casa Fida:`,
       '',
       `  ${project.title}`,
       `  Price: ${formatMoney(project.contract_amount)}`,

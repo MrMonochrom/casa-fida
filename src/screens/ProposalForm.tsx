@@ -55,7 +55,7 @@ export function ProposalForm() {
       <BackLink to="/projects">Projects</BackLink>
       <PageHeader
         title="Send a proposal"
-        subtitle="For work you've already talked through with a client. They accept it on BuildBridge, and the project starts."
+        subtitle="For work you've already talked through with a client. They accept it on Casa Fida, and the project starts."
       />
       <form className="card form form--narrow" onSubmit={handleSubmit} noValidate>
         <h2 className="form__section">Your client</h2>
@@ -66,7 +66,7 @@ export function ProposalForm() {
             type="email"
             value={clientEmail}
             onChange={setClientEmail}
-            hint="If they're new to BuildBridge, we'll email them a link to sign up and see it."
+            hint="If they're new to Casa Fida, we'll email them a link to sign up and see it."
             required
           />
         </div>

@@ -12,7 +12,7 @@ export default async function setup() {
   }
 
   const schema = readFileSync(new URL('../../db/schema.sql', import.meta.url), 'utf8').replace(
-    /\bbuildbridge\b/g,
+    /\bcasa_fida\b/g,
     TEST_DB,
   )
   await conn.query(`DROP DATABASE IF EXISTS ${TEST_DB}`)

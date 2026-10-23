@@ -346,7 +346,7 @@ function Overview({
               <p className="muted small">
                 From {isBuilder ? 'your quote on' : 'your job'}{' '}
                 <Link to={`/jobs/${p.fromQuote.jobId}`} className="text-link">
-                  {isBuilder ? 'the client’s job' : 'posted on BuildBridge'}
+                  {isBuilder ? 'the client’s job' : 'posted on Casa Fida'}
                 </Link>
                 {p.fromQuote.weeks && ` · quoted at about ${weeksText(p.fromQuote.weeks)}`}
               </p>

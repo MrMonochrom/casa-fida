@@ -34,7 +34,7 @@ export function BuilderPage({ id }: { id: number | null }) {
         <div className="profile-hero__text">
           <h1 className="page-title">{builder.businessName}</h1>
           <p className="muted">
-            {builder.name} · {builder.serviceArea} · on BuildBridge since {dateText(builder.memberSince)}
+            {builder.name} · {builder.serviceArea} · on Casa Fida since {dateText(builder.memberSince)}
           </p>
           {builder.headline && <p className="profile-hero__headline">{builder.headline}</p>}
           <Rating rating={builder.rating} count={builder.reviewCount} />

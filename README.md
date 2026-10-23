@@ -1,4 +1,4 @@
-# BuildBridge
+# Casa Fida
 
 Builders and their clients, on the same page. Clients find builders and post jobs; builders send quotes or proposals. Once someone is hired, both sides follow the project in one place: its stages, photo updates from the site, changes to the price, invoices and messages.
 
@@ -20,7 +20,7 @@ MySQL doesn't start by itself after a reboot, so run `npm run db:start` before `
 
 ## Test accounts
 
-[db/seed.sql](db/seed.sql) creates these accounts. All of them use the password **`BuildBridge123`**.
+[db/seed.sql](db/seed.sql) creates these accounts. All of them use the password **`CasaFida123`**.
 
 | Who | Email | Good for trying |
 |---|---|---|
@@ -73,7 +73,7 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 | `npm run test:coverage` | Runs all tests and reports how much of the code they cover |
 | `npm run db:start` / `db:stop` / `db:status` | Starts, stops or checks the local MySQL (port 3307) |
 | `npm run db:users` | Prints every account, with builders' businesses and trades |
-| `npm run db:shell` | Opens a MySQL prompt on the `buildbridge` database |
+| `npm run db:shell` | Opens a MySQL prompt on the `casa_fida` database |
 | `npm run db:reset` | Deletes all data and reloads the sample data (asks first) |
 
 ## How it fits together
@@ -126,7 +126,7 @@ npx vitest run server/routes/billing.api.test.ts
 | **server** | Logic that needs no database: passwords, sessions, rate limits, live events and money. | `server/**/*.test.ts`, `shared/**/*.test.ts` |
 | **api** | Every endpoint against a real MySQL: validation messages, who may see and change what, prices and invoice totals, photo limits, messaging privacy and live events. | `server/**/*.api.test.ts` |
 
-The **api** tests need MySQL running (`npm run db:start`). They never touch your data: each run creates a separate `buildbridge_test` database and deletes it afterwards.
+The **api** tests need MySQL running (`npm run db:start`). They never touch your data: each run creates a separate `casa_fida_test` database and deletes it afterwards.
 
 ## Running in production
 
@@ -138,7 +138,7 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 | `APP_URL` | The address in links in emails | `http://localhost:5174` |
 | `PORT`, `HOST` | Where the server listens | `3002`, `127.0.0.1` |
 | `TRUST_PROXY` | How many proxies sit in front, so login limits see real addresses | off |
-| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | The MySQL database | `127.0.0.1`, `3307`, `root`, empty, `buildbridge` |
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | The MySQL database | `127.0.0.1`, `3307`, `root`, empty, `casa_fida` |
 | `SMTP_URL`, `MAIL_FROM` | Sending email. Without `SMTP_URL`, emails are only printed in the server's log. | not set |
 
 ## Limitations and next steps
