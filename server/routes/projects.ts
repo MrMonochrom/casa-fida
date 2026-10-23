@@ -20,6 +20,7 @@ import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
 import { appUrl, sendEmail } from '../mailer.ts'
 import { confirmEmail } from '../verification.ts'
+import { notify } from '../notifications.ts'
 import { loadProject, moneyOf, projectAs, projectFor, projectSelect } from '../projects.ts'
 import type { ProjectRow, ProjectStatus, Side } from '../projects.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
@@ -429,6 +430,7 @@ projectRoutes.post('/projects/:id/accept', requireRole('client'), async (req, re
     await ensureConversation(project.client_id!, project.builder_id, conn)
   })
   publish(project.builder_id, { type: 'project', projectId: project.id })
+  notify(project.builder_id, 'projects', (m) => m.proposalAnswered(project.title, true), `/projects/${project.id}`)
   res.json({ project: await projectDetail((await loadProject(project.id))!, 'client') })
 })
 
@@ -436,6 +438,7 @@ projectRoutes.post('/projects/:id/decline', requireRole('client'), async (req, r
   const project = await projectAs(res, req.params.id, 'client', ['proposed'])
   await db.execute("UPDATE projects SET status = 'declined' WHERE id = ?", [project.id])
   publish(project.builder_id, { type: 'project', projectId: project.id })
+  notify(project.builder_id, 'projects', (m) => m.proposalAnswered(project.title, false), `/projects/${project.id}`)
   res.json({ project: await projectDetail((await loadProject(project.id))!, 'client') })
 })
 
@@ -445,6 +448,12 @@ projectRoutes.post('/projects/:id/complete', requireRole('builder'), async (req,
   await db.execute("UPDATE projects SET status = 'completed', completed_at = NOW() WHERE id = ?", [project.id])
   await db.execute("UPDATE stages SET status = 'done' WHERE project_id = ?", [project.id])
   publish(project.client_id, { type: 'project', projectId: project.id })
+  notify(
+    project.client_id,
+    'projects',
+    (m) => m.projectCompleted(project.business_name, project.title),
+    `/projects/${project.id}`,
+  )
   res.json({ project: await projectDetail((await loadProject(project.id))!, 'builder') })
 })
 

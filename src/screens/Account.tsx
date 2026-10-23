@@ -8,8 +8,9 @@ import { dateText } from '../format'
 import { Link } from '../components/Link'
 import { useT } from '../i18n'
 import { useSession } from '../session'
+import type { EmailSettings } from '../types'
 
-/** Your details, your business profile (builders), your password, and logging out. */
+/** Your details, your business profile (builders), your password, which emails you get, and logging out. */
 export function Account() {
   const t = useT()
   const { user, onUserChange, onLogout } = useSession()
@@ -46,6 +47,10 @@ export function Account() {
         <section className="section">
           <h2 className="section__title">{t.common.password}</h2>
           <PasswordForm />
+        </section>
+        <section className="section">
+          <h2 className="section__title">{t.emails.title}</h2>
+          <EmailSettingsForm />
         </section>
       </div>
     </>
@@ -100,6 +105,64 @@ function DetailsForm() {
       <div className="form-actions form-actions--start">
         <button type="submit" className="button button--primary" disabled={busy}>
           {busy ? t.common.saving : t.account.saveDetails}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function EmailSettingsForm() {
+  const t = useT()
+  const { user, onUserChange } = useSession()
+  // A page opened before email settings existed has none for the account yet: they start all on.
+  const [settings, setSettings] = useState(user.notifications ?? { quotes: true, projects: true, messages: true })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  const builder = user.role === 'builder'
+  const choices: { key: keyof EmailSettings; label: string }[] = [
+    { key: 'quotes', label: builder ? t.emails.quotesBuilder : t.emails.quotesClient },
+    { key: 'projects', label: builder ? t.emails.projectsBuilder : t.emails.projectsClient },
+    { key: 'messages', label: t.emails.messages },
+  ]
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    setSaved(false)
+    try {
+      onUserChange(await api.saveEmailSettings(settings))
+      setSaved(true)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="card form" onSubmit={handleSubmit} noValidate>
+      <p className="muted">{t.emails.hint}</p>
+      {choices.map(({ key, label }) => (
+        <label key={key} className="checkbox">
+          <input
+            type="checkbox"
+            checked={settings[key]}
+            onChange={(e) => setSettings({ ...settings, [key]: e.target.checked })}
+          />
+          <span>{label}</span>
+        </label>
+      ))}
+      <FormError error={error} />
+      {saved && !error && (
+        <p className="form-success" role="status">
+          {t.common.saved}
+        </p>
+      )}
+      <div className="form-actions form-actions--start">
+        <button type="submit" className="button button--primary" disabled={busy}>
+          {busy ? t.common.saving : t.common.save}
         </button>
       </div>
     </form>

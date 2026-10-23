@@ -19,6 +19,15 @@ CREATE TABLE users (
   -- SHA-256 of the token in the newest confirmation link, while it can still be used.
   verify_token_hash CHAR(64) NULL UNIQUE,
   verify_expires_at TIMESTAMP NULL,
+  -- SHA-256 of the token in the newest password reset link, while it can still be used.
+  reset_token_hash CHAR(64) NULL UNIQUE,
+  reset_expires_at TIMESTAMP NULL,
+  -- The language the person uses the app in, for emails sent to them. The keys are in shared/languages.ts.
+  language CHAR(2) NOT NULL DEFAULT 'en',
+  -- Which emails they want about things that happen while they're away.
+  email_quotes BOOLEAN NOT NULL DEFAULT TRUE,
+  email_projects BOOLEAN NOT NULL DEFAULT TRUE,
+  email_messages BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login_at TIMESTAMP NULL
 );
@@ -190,6 +199,8 @@ CREATE TABLE invoices (
   status ENUM('due', 'paid', 'void') NOT NULL DEFAULT 'due',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   paid_at TIMESTAMP NULL,
+  -- When the client was emailed that it's overdue, so it happens once.
+  overdue_reminded_at TIMESTAMP NULL,
   UNIQUE (project_id, number),
   FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
 );

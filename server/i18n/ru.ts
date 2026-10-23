@@ -1,6 +1,6 @@
 // Everything the server says to people, in Russian.
 import { pluralRu } from '../../shared/languages.ts'
-import { formatMoney } from '../../shared/money.ts'
+import { formatChange, formatMoney } from '../../shared/money.ts'
 import type { Currency } from '../../shared/money.ts'
 import {
   ABOUT_MAX,
@@ -20,6 +20,10 @@ import {
 import type { ServerMessages } from './en.ts'
 
 const n = (value: number) => value.toLocaleString('ru-RU')
+
+/** A 'YYYY-MM-DD' date the way this language writes it. */
+const day = (date: string) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString('ru-RU', { timeZone: 'UTC', dateStyle: 'medium' })
 
 export const ru: ServerMessages = {
   general: {
@@ -47,6 +51,7 @@ export const ru: ServerMessages = {
     wrongPassword: 'Текущий пароль указан неверно.',
     passwordTooShort: `Пароль должен содержать не менее ${PASSWORD_MIN} символов.`,
     passwordTooLong: 'Пароль слишком длинный.',
+    resetLinkGone: 'Срок действия ссылки для сброса пароля истёк, или она уже использована. Запросите новую.',
     verifyLinkGone: 'Срок действия этой ссылки истёк, или она уже использована. Войдите, чтобы получить новую.',
     alreadyConfirmed: 'Ваша почта уже подтверждена.',
   },
@@ -79,6 +84,7 @@ export const ru: ServerMessages = {
     currencyLocked: 'Валюту нельзя изменить, когда строители уже прислали сметы.',
   },
   quotes: {
+    confirmEmailFirst: 'Подтвердите свою почту, прежде чем отправлять сметы. Мы прислали вам ссылку.',
     enterPrice: 'Укажите вашу цену.',
     weeksWhole: 'Срок работ должен быть целым числом недель.',
     enterMessage: 'Напишите, что входит в цену.',
@@ -176,6 +182,55 @@ export const ru: ServerMessages = {
     subject: 'Подтвердите почту для Casa Fida',
     intro: 'Откройте эту ссылку, чтобы подтвердить свою почту для Casa Fida:',
     ignore: 'Если вы не регистрировались на Casa Fida, просто проигнорируйте это письмо.',
+  },
+  passwordResetEmail: {
+    subject: 'Сброс пароля Casa Fida',
+    intro:
+      'Кто-то запросил сброс пароля для вашего аккаунта Casa Fida. Откройте эту ссылку, чтобы задать новый пароль. Она действует один час:',
+    ignore: 'Если это были не вы, просто проигнорируйте письмо: пароль останется прежним.',
+  },
+  notifications: {
+    open: 'Открыть на Casa Fida:',
+    settings: 'Выбрать, какие письма получать:',
+    // Names are written after a colon, since they can't be declined reliably.
+    newQuote: (business: string, job: string, cents: number, currency: Currency) => ({
+      subject: `Новая смета по заказу «${job}»`,
+      text: `Новая смета по заказу «${job}»: ${formatMoney(cents, currency, 'ru')}. Строитель: ${business}.`,
+    }),
+    quoteAccepted: (job: string) => ({
+      subject: `Ваша смета принята: ${job}`,
+      text: `Клиент принял вашу смету по заказу «${job}». Проект начался.`,
+    }),
+    proposalAnswered: (project: string, accepted: boolean) => ({
+      subject: accepted ? `Предложение принято: ${project}` : `Предложение отклонено: ${project}`,
+      text: accepted
+        ? `Клиент принял ваше предложение «${project}». Проект начался.`
+        : `Клиент отклонил ваше предложение «${project}».`,
+    }),
+    changeOrder: (business: string, change: string, project: string, cents: number, currency: Currency) => ({
+      subject: `Изменение на одобрение: ${change}`,
+      text: `Запрос на изменение по проекту «${project}»: «${change}», ${formatChange(cents, currency, 'ru')}. Строитель: ${business}. Ничего не изменится, пока вы его не одобрите.`,
+    }),
+    changeAnswered: (change: string, project: string, approved: boolean) => ({
+      subject: approved ? `Изменение одобрено: ${change}` : `Изменение отклонено: ${change}`,
+      text: `Клиент ${approved ? 'одобрил' : 'отклонил'} изменение «${change}» по проекту «${project}».`,
+    }),
+    invoice: (business: string, number: number, project: string, cents: number, currency: Currency, due: string) => ({
+      subject: `Новый счёт № ${number}: ${project}`,
+      text: `Счёт № ${number} по проекту «${project}»: ${formatMoney(cents, currency, 'ru')}, срок оплаты — ${day(due)}. Строитель: ${business}.`,
+    }),
+    invoiceOverdue: (business: string, number: number, project: string, cents: number, currency: Currency, due: string) => ({
+      subject: `Счёт № ${number} просрочен`,
+      text: `Счёт № ${number} по проекту «${project}» (${formatMoney(cents, currency, 'ru')}) нужно было оплатить до ${day(due)}. Строитель: ${business}.`,
+    }),
+    projectCompleted: (business: string, project: string) => ({
+      subject: `Проект «${project}» завершён`,
+      text: `Проект «${project}» отмечен как завершённый. Строитель: ${business}. Как всё прошло? Вы можете оставить отзыв.`,
+    }),
+    message: (name: string) => ({
+      subject: `Новое сообщение: ${name}`,
+      text: `Новое сообщение на Casa Fida. Отправитель: ${name}.`,
+    }),
   },
   proposalEmail: {
     subject: (business: string) => `Предложение по проекту от ${business}`,

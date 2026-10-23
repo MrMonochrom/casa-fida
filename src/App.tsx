@@ -193,7 +193,8 @@ export default function App({ user, onUserChange, onLogout }: Props) {
           </div>
         </header>
         <main className="main">
-          {!user.emailVerified && <VerifyEmailBanner />}
+          {/* Only when the server says so: a page opened before confirmation existed doesn't know. */}
+          {user.emailVerified === false && <VerifyEmailBanner />}
           <Screen path={path} user={user} />
         </main>
       </div>

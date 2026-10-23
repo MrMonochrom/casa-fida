@@ -83,4 +83,9 @@ export const limits = {
   invitesPerBuilderPerDay: new Limiter(50, DAY),
   /** Confirmation emails one person can ask for again. */
   verificationEmailsPerUser: new Limiter(5, 60 * MINUTE),
+  /** Password reset emails: asked for from one IP address, and sent to one address. */
+  passwordResetsPerIp: new Limiter(10, 60 * MINUTE),
+  passwordResetsPerEmail: new Limiter(3, 60 * MINUTE),
+  /** New quotes one builder can send in a day: each one emails a client. */
+  newQuotesPerBuilderPerDay: new Limiter(30, DAY),
 }

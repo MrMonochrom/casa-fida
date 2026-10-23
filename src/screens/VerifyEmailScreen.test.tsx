@@ -62,13 +62,19 @@ describe('the banner', () => {
     expect(await screen.findByText('Sent. Check your inbox.')).toBeInTheDocument()
   })
 
-  it('tells a builder they need it to send proposals', () => {
+  it('tells a builder they need it to send quotes and proposals', () => {
     renderApp(makeBuilderUser({ emailVerified: false }))
-    expect(screen.getByText(/Confirm your email address to send proposals/)).toBeInTheDocument()
+    expect(screen.getByText(/Confirm your email address to send quotes and proposals/)).toBeInTheDocument()
   })
 
   it("isn't there once the address is confirmed", () => {
     renderApp(makeUser())
+    expect(screen.queryByText(/Confirm your email address/)).not.toBeInTheDocument()
+  })
+
+  it("isn't there on a page opened before confirmation existed", () => {
+    const { emailVerified: _missing, ...openedBefore } = makeUser()
+    renderApp(openedBefore as ReturnType<typeof makeUser>)
     expect(screen.queryByText(/Confirm your email address/)).not.toBeInTheDocument()
   })
 })

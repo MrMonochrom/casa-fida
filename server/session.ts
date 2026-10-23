@@ -4,6 +4,7 @@ import { db } from './db.ts'
 import { hashToken, newSessionToken } from './auth.ts'
 import { cookie } from './cookies.ts'
 import { closeStreams } from './events.ts'
+import { chosenLanguage } from './i18n/index.ts'
 import type { Text } from './i18n/index.ts'
 import { fail } from './validate.ts'
 import type { UserRow } from './users.ts'
@@ -59,6 +60,13 @@ export async function requireUser(req: Request, res: Response, next: NextFunctio
   if (!user) {
     fail(res, 401, (m) => m.general.logInAgain)
     return
+  }
+  // Emails sent to them later (like notifications) are in the language they use the app in. Only
+  // the app's own choice counts: a request without it (from a script, say) leaves it alone.
+  const language = chosenLanguage(req)
+  if (language && user.language !== language) {
+    await db.execute('UPDATE users SET language = ? WHERE id = ?', [language, user.id])
+    user.language = language
   }
   res.locals.user = user
   next()

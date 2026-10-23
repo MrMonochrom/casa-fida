@@ -1488,6 +1488,12 @@ a.list__row:hover {
   font-size: 0.93rem;
 }
 
+.auth-card > .auth-card__forgot {
+  margin-top: 8px;
+  text-align: right;
+  font-size: 0.9rem;
+}
+
 .role-choice {
   display: grid;
   grid-template-columns: 1fr 1fr;

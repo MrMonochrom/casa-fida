@@ -17,6 +17,8 @@ import { db, inTransaction, ms } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
 import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
+import { notify } from '../notifications.ts'
+import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { me, requireRole, requireUser } from '../session.ts'
 import { shortName } from '../users.ts'
 import type { UserRow } from '../users.ts'
@@ -377,13 +379,32 @@ jobRoutes.put('/jobs/:id/quote', requireRole('builder'), async (req, res) => {
 
   const existing = await myQuoteOn(job.id, builder.id)
   if (existing?.status === 'declined') return fail(res, 409, (m) => m.quotes.declined)
+  // A new quote emails the client, so only from builders who have confirmed their own address,
+  // and only so many a day.
+  const isNew = !existing || existing.status === 'withdrawn'
+  const key = String(builder.id)
+  if (isNew) {
+    if (!builder.email_verified_at) return fail(res, 409, (m) => m.quotes.confirmEmailFirst)
+    const wait = limits.newQuotesPerBuilderPerDay.retryAfter(key)
+    if (wait) return tooManyAttempts(res, wait)
+  }
   await db.execute(
     `INSERT INTO quotes (job_id, builder_id, amount, weeks, message) VALUES (?, ?, ?, ?, ?) AS new
      ON DUPLICATE KEY UPDATE amount = new.amount, weeks = new.weeks, message = new.message, status = 'pending'`,
     [job.id, builder.id, input.amount, input.weeks, input.message],
   )
   publish(job.client_id, { type: 'job', jobId: job.id })
-  res.status(existing ? 200 : 201).json({ quote: await myQuoteOn(job.id, builder.id) })
+  const quote = (await myQuoteOn(job.id, builder.id))!
+  if (isNew) {
+    limits.newQuotesPerBuilderPerDay.hit(key)
+    notify(
+      job.client_id,
+      'quotes',
+      (m) => m.newQuote(quote.builder.businessName, job.title, quote.amount, job.currency),
+      `/jobs/${job.id}`,
+    )
+  }
+  res.status(existing ? 200 : 201).json({ quote })
 })
 
 // Withdraws your quote while the client hasn't answered it.
@@ -448,6 +469,7 @@ jobRoutes.post('/quotes/:id/accept', requireRole('client'), async (req, res) => 
 
   publish(quote.builder_id, { type: 'job', jobId: job.id })
   publish(quote.builder_id, { type: 'project', projectId })
+  notify(quote.builder_id, 'quotes', (m) => m.quoteAccepted(job.title), `/projects/${projectId}`)
   for (const builderId of others) publish(builderId, { type: 'job', jobId: job.id })
   res.json({ projectId })
 })

@@ -1,5 +1,6 @@
-import { afterAll, beforeEach } from 'vitest'
+import { afterAll, afterEach, beforeEach } from 'vitest'
 import { outbox } from '../mailer.ts'
+import { notificationsSent } from '../notifications.ts'
 import { resetRateLimits } from '../rateLimit.ts'
 import { TEST_DB } from './testDb.ts'
 
@@ -13,6 +14,9 @@ beforeEach(() => {
   outbox.length = 0
   resetRateLimits()
 })
+
+// Notification emails go out after the request answers; a test's emails finish before the next starts.
+afterEach(notificationsSent)
 
 afterAll(async () => {
   const { db } = await import('../db.ts')

@@ -5,13 +5,14 @@ import type { Role } from '../../shared/rules.ts'
 import { db } from '../db.ts'
 import { hashPassword, hashToken, verifyPassword } from '../auth.ts'
 import { closeStreams } from '../events.ts'
-import { languageOf } from '../i18n/index.ts'
+import { chosenLanguage, languageOf } from '../i18n/index.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { currentUser, endSession, me, requireUser, sessionToken, startSession } from '../session.ts'
 import { loadUser, ownAccount } from '../users.ts'
 import type { UserRow } from '../users.ts'
 import { badRequest, fail, invalid, isEmail, passwordProblem, text } from '../validate.ts'
 import { confirmEmail, sendVerificationEmail, userForVerifyToken } from '../verification.ts'
+import { sendPasswordResetEmail, userForResetToken } from '../passwordReset.ts'
 
 export const accountRoutes = express.Router()
 
@@ -44,8 +45,8 @@ accountRoutes.post('/signup', async (req, res) => {
   let userId: number
   try {
     const [result] = await db.execute<ResultSetHeader>(
-      'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)',
-      [input.email, await hashPassword(input.password), input.name, input.role],
+      'INSERT INTO users (email, password_hash, name, role, language) VALUES (?, ?, ?, ?, ?)',
+      [input.email, await hashPassword(input.password), input.name, input.role, languageOf(req)],
     )
     userId = result.insertId
   } catch (err) {
@@ -87,6 +88,8 @@ accountRoutes.post('/login', async (req, res) => {
     return
   }
   limits.failedLoginsPerEmailAndIp.reset(emailAndIp)
+  const language = chosenLanguage(req)
+  if (language) await db.execute('UPDATE users SET language = ? WHERE id = ?', [language, user.id])
 
   await startSession(res, user.id)
   res.json({ user: await ownAccount(user) })
@@ -130,7 +133,62 @@ accountRoutes.put('/me/password', requireUser, async (req, res) => {
   const thisSession = hashToken(sessionToken(req) ?? '')
   await db.execute('DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?', [user.id, thisSession])
   closeStreams(user.id, { except: thisSession })
+  // A reset link sent before this would undo it.
+  await db.execute('UPDATE users SET reset_token_hash = NULL, reset_expires_at = NULL WHERE id = ?', [user.id])
   res.status(204).end()
+})
+
+// Which emails you get about things that happen while you're away.
+accountRoutes.put('/me/notifications', requireUser, async (req, res) => {
+  const user = me(res)
+  const wants = (key: string) => req.body?.[key] !== false
+  await db.execute('UPDATE users SET email_quotes = ?, email_projects = ?, email_messages = ? WHERE id = ?', [
+    wants('quotes'),
+    wants('projects'),
+    wants('messages'),
+    user.id,
+  ])
+  res.json({ user: await ownAccount((await loadUser(user.id))!) })
+})
+
+// ---------- Forgotten passwords ----------
+
+// Emails a link to choose a new password. The answer is the same whether or not an account uses the
+// address, so this can't be used to find out who has one.
+accountRoutes.post('/password-reset', async (req, res) => {
+  const ip = req.ip ?? ''
+  const email = text(req.body?.email).toLowerCase()
+  if (!isEmail(email)) return badRequest(res, (m) => m.account.enterEmail)
+  const wait = Math.max(limits.passwordResetsPerIp.retryAfter(ip), limits.passwordResetsPerEmail.retryAfter(email))
+  if (wait) return tooManyAttempts(res, wait)
+  limits.passwordResetsPerIp.hit(ip)
+  limits.passwordResetsPerEmail.hit(email)
+
+  const [rows] = await db.execute<UserRow[]>('SELECT * FROM users WHERE email = ?', [email])
+  if (rows[0]) {
+    await sendPasswordResetEmail(rows[0], languageOf(req)).catch((err) => console.error('Password reset email failed:', err))
+  }
+  res.status(204).end()
+})
+
+// Sets a new password from a reset link, logs out everywhere else and logs in here. Opening the
+// link proves the email is theirs, so it also counts as confirming it.
+accountRoutes.post('/password-reset/confirm', async (req, res) => {
+  const user = await userForResetToken(text(req.body?.token))
+  if (!user) return fail(res, 404, (m) => m.account.resetLinkGone)
+  const problem = passwordProblem(req.body?.password)
+  if (problem) return badRequest(res, problem)
+
+  await db.execute(
+    'UPDATE users SET password_hash = ?, reset_token_hash = NULL, reset_expires_at = NULL WHERE id = ?',
+    [await hashPassword(req.body.password), user.id],
+  )
+  await db.execute('DELETE FROM sessions WHERE user_id = ?', [user.id])
+  closeStreams(user.id, { except: '' })
+  limits.failedLoginsPerEmail.reset(user.email)
+  await confirmEmail(user)
+  await startSession(res, user.id)
+  res.json({ user: await ownAccount((await loadUser(user.id))!) })
 })
 
 // Confirms an email address from the link in the confirmation email. Works without logging in:
