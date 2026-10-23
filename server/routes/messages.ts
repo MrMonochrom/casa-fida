@@ -4,6 +4,7 @@ import { MESSAGE_MAX } from '../../shared/rules.ts'
 import { builderKnowsClient, ensureConversation } from '../conversations.ts'
 import { db, ms } from '../db.ts'
 import { notFound } from '../errors.ts'
+import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
 import { me, requireUser } from '../session.ts'
 import type { UserRow } from '../users.ts'
@@ -13,7 +14,7 @@ export const messageRoutes = express.Router()
 
 /** The most messages one request returns. The app asks again for the rest. */
 const MESSAGES_PER_REQUEST = 500
-const CONVERSATION_GONE = "This conversation doesn't exist."
+const CONVERSATION_GONE: Text = (m) => m.messages.gone
 
 interface ConversationRow extends RowDataPacket {
   id: number
@@ -71,17 +72,17 @@ messageRoutes.post('/conversations', requireUser, async (req, res) => {
       )
     : [[]]
   const other = (rows as RowDataPacket[])[0]
-  if (!other) return fail(res, 404, "This person doesn't exist.")
+  if (!other) return fail(res, 404, (m) => m.messages.personGone)
   if (other.role === user.role) {
-    return badRequest(res, user.role === 'client' ? 'You can message builders.' : 'You can message clients.')
+    return badRequest(res, user.role === 'client' ? (m) => m.messages.clientsMessageBuilders : (m) => m.messages.buildersMessageClients)
   }
   let conversationId: number
   if (user.role === 'client') {
-    if (!other.has_profile) return fail(res, 404, "This builder doesn't have a profile yet.")
+    if (!other.has_profile) return fail(res, 404, (m) => m.builders.noProfileYet)
     conversationId = await ensureConversation(user.id, other.id)
   } else {
     if (!(await builderKnowsClient(user.id, other.id))) {
-      return fail(res, 403, 'You can message a client once you have quoted for them or have a project together.')
+      return fail(res, 403, (m) => m.messages.notYet)
     }
     conversationId = await ensureConversation(other.id, user.id)
   }
@@ -140,8 +141,8 @@ messageRoutes.get('/conversations/:id/messages', requireUser, async (req, res) =
 messageRoutes.post('/conversations/:id/messages', requireUser, async (req, res) => {
   const user = me(res)
   const body = longText(req.body?.text)
-  if (!body) return badRequest(res, 'Write a message first.')
-  if (body.length > MESSAGE_MAX) return badRequest(res, `Messages can be up to ${MESSAGE_MAX.toLocaleString('en')} characters.`)
+  if (!body) return badRequest(res, (m) => m.messages.enterText)
+  if (body.length > MESSAGE_MAX) return badRequest(res, (m) => m.messages.tooLong)
   const conversation = await conversationFor(user, req.params.id)
 
   const [result] = await db.execute<ResultSetHeader>(

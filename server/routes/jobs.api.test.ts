@@ -26,6 +26,7 @@ describe('POST /api/jobs', () => {
       description: 'Line one\nLine two',
       trade: 'kitchens',
       location: 'Denver, CO',
+      currency: 'USD',
       budgetMin: 2_000_000,
       budgetMax: 3_000_000,
       timing: 'within_3_months',
@@ -56,6 +57,7 @@ describe('POST /api/jobs', () => {
     [{ budgetMax: 'lots' }, 'The budget should be an amount above zero.'],
     [{ budgetMax: 12.5 }, 'The budget should be an amount above zero.'],
     [{ budgetMin: 500, budgetMax: 100 }, "The budget's lowest amount is more than its highest."],
+    [{ currency: 'GBP' }, 'Choose a currency.'],
   ])('refuses %j', async (overrides, error) => {
     const ana = await createClient()
     const res = await ana.agent.post('/api/jobs').send(validJob(overrides))
@@ -209,6 +211,7 @@ describe('GET /api/jobs/:id', () => {
       id: expect.any(Number),
       jobId: job.id,
       amount: 2_000_000,
+      currency: 'USD',
       weeks: null,
       message: 'Cheap and cheerful.',
       status: 'pending',
@@ -295,7 +298,7 @@ describe('PUT /api/jobs/:id/quote', () => {
     [{ amount: 0 }, 'Enter your price.'],
     [{ amount: -100 }, 'Enter your price.'],
     [{ amount: '100' }, 'Enter your price.'],
-    [{ amount: 1_000_000_001 }, 'Enter your price.'],
+    [{ amount: 10_000_000_001 }, 'Enter your price.'],
     [{ weeks: 0 }, 'The length of the job should be a whole number of weeks.'],
     [{ weeks: 1.5 }, 'The length of the job should be a whole number of weeks.'],
     [{ message: ' ' }, "Say what's included in your price."],

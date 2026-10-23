@@ -10,19 +10,22 @@ import {
   isJobTiming,
   isTrade,
 } from '../../shared/rules.ts'
+import { DEFAULT_CURRENCY, isCurrency } from '../../shared/money.ts'
+import type { Currency } from '../../shared/money.ts'
 import { ensureConversation } from '../conversations.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
+import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
 import { me, requireRole, requireUser } from '../session.ts'
 import { shortName } from '../users.ts'
 import type { UserRow } from '../users.ts'
-import { amountFrom, badRequest, fail, idFrom, longText, text, wholeFrom } from '../validate.ts'
+import { amountFrom, badRequest, fail, idFrom, invalid, longText, text, wholeFrom } from '../validate.ts'
 
 export const jobRoutes = express.Router()
 
-const JOB_GONE = "This job doesn't exist or isn't open any more."
-const QUOTE_GONE = "This quote doesn't exist."
+const JOB_GONE: Text = (m) => m.jobs.goneOrClosed
+const QUOTE_GONE: Text = (m) => m.quotes.gone
 
 function readJob(body: Record<string, unknown>) {
   const title = text(body.title)
@@ -30,25 +33,27 @@ function readJob(body: Record<string, unknown>) {
   const location = text(body.location)
   const trade = body.trade
   const timing = body.timing ?? 'flexible'
+  const currency = body.currency ?? DEFAULT_CURRENCY
 
-  if (!title || title.length > TITLE_MAX) return { error: 'Give the job a short title.' }
-  if (!description) return { error: 'Describe the work you need done.' }
+  if (!title || title.length > TITLE_MAX) return invalid((m) => m.jobs.enterTitle)
+  if (!description) return invalid((m) => m.jobs.enterDescription)
   if (description.length > DESCRIPTION_MAX) {
-    return { error: `Keep the description under ${DESCRIPTION_MAX.toLocaleString('en')} characters.` }
+    return invalid((m) => m.general.descriptionTooLong)
   }
-  if (!isTrade(trade)) return { error: 'Choose the kind of work.' }
-  if (!location || location.length > PLACE_MAX) return { error: 'Where is the job? A town or neighborhood is enough.' }
-  if (!isJobTiming(timing)) return { error: 'Choose when you would like the work to start.' }
+  if (!isTrade(trade)) return invalid((m) => m.jobs.chooseTrade)
+  if (!location || location.length > PLACE_MAX) return invalid((m) => m.jobs.enterLocation)
+  if (!isJobTiming(timing)) return invalid((m) => m.jobs.chooseTiming)
+  if (!isCurrency(currency)) return invalid((m) => m.general.chooseCurrency)
 
   const budgetMin = body.budgetMin == null ? null : amountFrom(body.budgetMin)
   const budgetMax = body.budgetMax == null ? null : amountFrom(body.budgetMax)
   if ((body.budgetMin != null && budgetMin === null) || (body.budgetMax != null && budgetMax === null)) {
-    return { error: 'The budget should be an amount above zero.' }
+    return invalid((m) => m.jobs.budgetPositive)
   }
   if (budgetMin !== null && budgetMax !== null && budgetMin > budgetMax) {
-    return { error: "The budget's lowest amount is more than its highest." }
+    return invalid((m) => m.jobs.budgetBackwards)
   }
-  return { title, description, location, trade, timing, budgetMin, budgetMax }
+  return { title, description, location, trade, timing, currency, budgetMin, budgetMax }
 }
 
 interface JobRow extends RowDataPacket {
@@ -59,6 +64,7 @@ interface JobRow extends RowDataPacket {
   description: string
   trade: string
   location: string
+  currency: Currency
   budget_min: number | null
   budget_max: number | null
   timing: string
@@ -70,7 +76,7 @@ interface JobRow extends RowDataPacket {
 }
 
 const JOB_SELECT = `
-  SELECT j.id, j.client_id, u.name AS client_name, j.title, j.description, j.trade, j.location,
+  SELECT j.id, j.client_id, u.name AS client_name, j.title, j.description, j.trade, j.location, j.currency,
          j.budget_min, j.budget_max, j.timing, j.status, ${ms('j.created_at')} AS created_at,
          (SELECT COUNT(*) FROM quotes q WHERE q.job_id = j.id AND q.status <> 'withdrawn') AS quote_count,
          (SELECT COUNT(*) FROM quotes q WHERE q.job_id = j.id AND q.status = 'pending') AS pending_quotes,
@@ -85,6 +91,7 @@ function toJob(row: JobRow, forBuilder: boolean) {
     description: row.description,
     trade: row.trade,
     location: row.location,
+    currency: row.currency,
     budgetMin: row.budget_min,
     budgetMax: row.budget_max,
     timing: row.timing,
@@ -118,6 +125,7 @@ interface QuoteRow extends RowDataPacket {
   job_location: string
   job_status: string
   job_trade: string
+  currency: Currency
   project_id: number | null
 }
 
@@ -127,7 +135,7 @@ const QUOTE_SELECT = `
          u.name AS builder_name, b.business_name, b.service_area, b.insured, b.license_number IS NOT NULL AS licensed,
          (SELECT AVG(r.rating) FROM reviews r WHERE r.builder_id = q.builder_id) AS rating,
          (SELECT COUNT(*) FROM reviews r WHERE r.builder_id = q.builder_id) AS review_count,
-         j.title AS job_title, j.location AS job_location, j.status AS job_status, j.trade AS job_trade,
+         j.title AS job_title, j.location AS job_location, j.status AS job_status, j.trade AS job_trade, j.currency,
          (SELECT p.id FROM projects p WHERE p.job_id = q.job_id AND p.builder_id = q.builder_id) AS project_id
   FROM quotes q
   JOIN jobs j ON j.id = q.job_id
@@ -138,7 +146,9 @@ function toQuote(row: QuoteRow) {
   return {
     id: row.id,
     jobId: row.job_id,
+    // Always in the job's currency.
     amount: row.amount,
+    currency: row.currency,
     weeks: row.weeks,
     message: row.message,
     status: row.status,
@@ -193,11 +203,21 @@ async function quotingBuilders(jobId: number): Promise<number[]> {
 
 jobRoutes.post('/jobs', requireRole('client'), async (req, res) => {
   const input = readJob(req.body ?? {})
-  if ('error' in input) return badRequest(res, input.error!)
+  if ('error' in input) return badRequest(res, input.error)
   const [result] = await db.execute<ResultSetHeader>(
-    `INSERT INTO jobs (client_id, title, description, trade, location, budget_min, budget_max, timing)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [me(res).id, input.title, input.description, input.trade, input.location, input.budgetMin, input.budgetMax, input.timing],
+    `INSERT INTO jobs (client_id, title, description, trade, location, currency, budget_min, budget_max, timing)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      me(res).id,
+      input.title,
+      input.description,
+      input.trade,
+      input.location,
+      input.currency,
+      input.budgetMin,
+      input.budgetMax,
+      input.timing,
+    ],
   )
   res.status(201).json({ job: toJob((await loadJob(result.insertId))!, false) })
 })
@@ -213,20 +233,35 @@ jobRoutes.get('/jobs/mine', requireRole('client'), async (_req, res) => {
 /** The job, if it's this client's own. */
 async function ownJob(req: Request, res: Response) {
   const job = await loadJob(idFrom(req.params.id))
-  if (!job || job.client_id !== me(res).id) throw notFound("This job doesn't exist.")
+  if (!job || job.client_id !== me(res).id) throw notFound((m) => m.jobs.gone)
   return job
 }
 
 // Changes a job while it's still open.
 jobRoutes.put('/jobs/:id', requireRole('client'), async (req, res) => {
   const job = await ownJob(req, res)
-  if (job.status !== 'open') return fail(res, 409, 'Only open jobs can be changed.')
-  const input = readJob(req.body ?? {})
-  if ('error' in input) return badRequest(res, input.error!)
+  if (job.status !== 'open') return fail(res, 409, (m) => m.jobs.onlyOpenChange)
+  const input = readJob({ ...req.body, currency: req.body?.currency ?? job.currency })
+  if ('error' in input) return badRequest(res, input.error)
+  // Quotes are in the job's currency, so it stays once any have come in.
+  if (input.currency !== job.currency && Number(job.quote_count) > 0) {
+    return fail(res, 409, (m) => m.jobs.currencyLocked)
+  }
   await db.execute(
-    `UPDATE jobs SET title = ?, description = ?, trade = ?, location = ?, budget_min = ?, budget_max = ?, timing = ?
+    `UPDATE jobs SET title = ?, description = ?, trade = ?, location = ?, currency = ?, budget_min = ?, budget_max = ?,
+                     timing = ?
      WHERE id = ?`,
-    [input.title, input.description, input.trade, input.location, input.budgetMin, input.budgetMax, input.timing, job.id],
+    [
+      input.title,
+      input.description,
+      input.trade,
+      input.location,
+      input.currency,
+      input.budgetMin,
+      input.budgetMax,
+      input.timing,
+      job.id,
+    ],
   )
   for (const builderId of await quotingBuilders(job.id)) publish(builderId, { type: 'job', jobId: job.id })
   res.json({ job: toJob((await loadJob(job.id))!, false) })
@@ -235,7 +270,7 @@ jobRoutes.put('/jobs/:id', requireRole('client'), async (req, res) => {
 // Stops taking quotes. Quotes still waiting for an answer are declined.
 jobRoutes.post('/jobs/:id/close', requireRole('client'), async (req, res) => {
   const job = await ownJob(req, res)
-  if (job.status !== 'open') return fail(res, 409, 'This job is already closed.')
+  if (job.status !== 'open') return fail(res, 409, (m) => m.jobs.alreadyClosed)
   const builders = await quotingBuilders(job.id)
   await inTransaction(async (conn) => {
     await conn.execute("UPDATE jobs SET status = 'closed' WHERE id = ?", [job.id])
@@ -257,7 +292,7 @@ jobRoutes.get('/jobs', requireRole('builder'), async (req, res) => {
     filter = 'AND j.trade IN (SELECT trade FROM builder_trades WHERE user_id = ?)'
     params.push(builderId)
   } else if (trade) {
-    if (!isTrade(trade)) return badRequest(res, 'Unknown trade.')
+    if (!isTrade(trade)) return badRequest(res, (m) => m.builders.unknownTrade)
     filter = 'AND j.trade = ?'
     params.push(trade)
   }
@@ -303,21 +338,21 @@ jobRoutes.get('/jobs/:id', requireUser, async (req, res) => {
       return
     }
   }
-  fail(res, 404, "This job doesn't exist or isn't open any more.")
+  fail(res, 404, (m) => m.jobs.goneOrClosed)
 })
 
 function readQuote(body: Record<string, unknown>) {
   const amount = amountFrom(body.amount)
   const message = longText(body.message)
-  if (amount === null) return { error: 'Enter your price.' }
+  if (amount === null) return invalid((m) => m.quotes.enterPrice)
   let weeks: number | null = null
   if (body.weeks != null && body.weeks !== '') {
     weeks = wholeFrom(body.weeks, 1, QUOTE_WEEKS_MAX)
-    if (weeks === null) return { error: 'The length of the job should be a whole number of weeks.' }
+    if (weeks === null) return invalid((m) => m.quotes.weeksWhole)
   }
-  if (!message) return { error: "Say what's included in your price." }
+  if (!message) return invalid((m) => m.quotes.enterMessage)
   if (message.length > QUOTE_MESSAGE_MAX) {
-    return { error: `Keep your message under ${QUOTE_MESSAGE_MAX.toLocaleString('en')} characters.` }
+    return invalid((m) => m.quotes.messageTooLong)
   }
   return { amount, weeks, message }
 }
@@ -330,14 +365,18 @@ async function hasBuilderProfile(user: UserRow) {
 // Sends your quote for an open job, or changes the one you sent.
 jobRoutes.put('/jobs/:id/quote', requireRole('builder'), async (req, res) => {
   const builder = me(res)
-  if (!(await hasBuilderProfile(builder))) return fail(res, 409, 'Set up your business profile before sending quotes.')
+  if (!(await hasBuilderProfile(builder))) return fail(res, 409, (m) => m.quotes.needProfile)
   const job = await loadJob(idFrom(req.params.id))
   if (!job || job.status !== 'open') return fail(res, 404, JOB_GONE)
+  // The app sends the currency the builder saw, in case the client changed it since.
+  if (req.body?.currency !== undefined && req.body.currency !== job.currency) {
+    return fail(res, 409, (m) => m.quotes.currencyChanged)
+  }
   const input = readQuote(req.body ?? {})
-  if ('error' in input) return badRequest(res, input.error!)
+  if ('error' in input) return badRequest(res, input.error)
 
   const existing = await myQuoteOn(job.id, builder.id)
-  if (existing?.status === 'declined') return fail(res, 409, 'The client has declined your quote for this job.')
+  if (existing?.status === 'declined') return fail(res, 409, (m) => m.quotes.declined)
   await db.execute(
     `INSERT INTO quotes (job_id, builder_id, amount, weeks, message) VALUES (?, ?, ?, ?, ?) AS new
      ON DUPLICATE KEY UPDATE amount = new.amount, weeks = new.weeks, message = new.message, status = 'pending'`,
@@ -353,7 +392,7 @@ jobRoutes.delete('/jobs/:id/quote', requireRole('builder'), async (req, res) => 
   const jobId = idFrom(req.params.id)
   const quote = jobId ? await myQuoteOn(jobId, builder.id) : null
   if (!quote || quote.status === 'withdrawn') return fail(res, 404, QUOTE_GONE)
-  if (quote.status !== 'pending') return fail(res, 409, 'The client has already answered this quote.')
+  if (quote.status !== 'pending') return fail(res, 409, (m) => m.quotes.alreadyAnswered)
   await db.execute("UPDATE quotes SET status = 'withdrawn' WHERE id = ?", [quote.id])
   const job = (await loadJob(jobId))!
   publish(job.client_id, { type: 'job', jobId: job.id })
@@ -376,9 +415,9 @@ jobRoutes.post('/quotes/:id/accept', requireRole('client'), async (req, res) => 
 
   const projectId = await inTransaction(async (conn) => {
     const [jobs] = await conn.execute<RowDataPacket[]>('SELECT status FROM jobs WHERE id = ? FOR UPDATE', [job.id])
-    if (jobs[0].status !== 'open') throw conflict('This job has already been closed or given to a builder.')
+    if (jobs[0].status !== 'open') throw conflict((m) => m.jobs.alreadyTaken)
     const [quotes] = await conn.execute<RowDataPacket[]>('SELECT status FROM quotes WHERE id = ? FOR UPDATE', [quote.id])
-    if (quotes[0].status !== 'pending') throw conflict('This quote is no longer waiting for an answer.')
+    if (quotes[0].status !== 'pending') throw conflict((m) => m.quotes.noLongerPending)
 
     await conn.execute("UPDATE quotes SET status = 'accepted' WHERE id = ?", [quote.id])
     await conn.execute("UPDATE quotes SET status = 'declined' WHERE job_id = ? AND id <> ? AND status = 'pending'", [
@@ -388,9 +427,20 @@ jobRoutes.post('/quotes/:id/accept', requireRole('client'), async (req, res) => 
     await conn.execute("UPDATE jobs SET status = 'hired' WHERE id = ?", [job.id])
     const [project] = await conn.execute<ResultSetHeader>(
       `INSERT INTO projects (builder_id, client_id, client_name, client_email, title, description, address,
-                             contract_amount, status, job_id, accepted_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, NOW())`,
-      [quote.builder_id, client.id, client.name, client.email, job.title, job.description, job.location, quote.amount, job.id],
+                             currency, contract_amount, status, job_id, accepted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, NOW())`,
+      [
+        quote.builder_id,
+        client.id,
+        client.name,
+        client.email,
+        job.title,
+        job.description,
+        job.location,
+        job.currency,
+        quote.amount,
+        job.id,
+      ],
     )
     await ensureConversation(client.id, quote.builder_id, conn)
     return project.insertId
@@ -405,7 +455,7 @@ jobRoutes.post('/quotes/:id/accept', requireRole('client'), async (req, res) => 
 // Turns a quote down. The job stays open for other quotes.
 jobRoutes.post('/quotes/:id/decline', requireRole('client'), async (req, res) => {
   const { quote } = await quoteForClient(req, res)
-  if (quote.status !== 'pending') return fail(res, 409, 'This quote is no longer waiting for an answer.')
+  if (quote.status !== 'pending') return fail(res, 409, (m) => m.quotes.noLongerPending)
   await db.execute("UPDATE quotes SET status = 'declined' WHERE id = ?", [quote.id])
   publish(quote.builder_id, { type: 'job', jobId: quote.job_id })
   res.json({ quote: toQuote((await loadQuote(quote.id))!) })

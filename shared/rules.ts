@@ -54,8 +54,11 @@ export const REVIEW_MAX = 2000
 export const STAGE_NAME_MAX = 80
 export const STAGES_MAX = 30
 
-/** Every amount is kept in cents. This is the largest single amount anywhere: 10 million. */
-export const AMOUNT_MAX_CENTS = 1_000_000_000
+/**
+ * Every amount is kept in cents. This is the largest single amount anywhere: 100 million, in any
+ * currency, so a house priced in rubles fits too.
+ */
+export const AMOUNT_MAX_CENTS = 10_000_000_000
 
 /** Longest time a quote can promise, and the most days a change order can add or remove. */
 export const QUOTE_WEEKS_MAX = 260

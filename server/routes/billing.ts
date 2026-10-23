@@ -2,10 +2,10 @@
 // invoices (the builder bills, and marks them paid when the money arrives).
 import express from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
-import { formatMoney } from '../../shared/money.ts'
 import { CHANGE_DAYS_MAX, DESCRIPTION_MAX, TITLE_MAX } from '../../shared/rules.ts'
 import { db, inTransaction } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
+import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
 import { loadProject, moneyOf, otherSide, projectAs, projectFor } from '../projects.ts'
 import type { ProjectStatus, Side } from '../projects.ts'
@@ -28,7 +28,7 @@ async function itemAs(
   const itemId = idFrom(id)
   const [rows] = itemId ? await db.execute<RowDataPacket[]>(`SELECT * FROM ${table} WHERE id = ?`, [itemId]) : [[]]
   const item = (rows as RowDataPacket[])[0]
-  const missing = table === 'invoices' ? "This invoice doesn't exist." : "This change order doesn't exist."
+  const missing: Text = table === 'invoices' ? (m) => m.invoices.gone : (m) => m.changes.gone
   if (!item) throw notFound(missing)
   // Someone who isn't on the project gets the same answer as for an id that doesn't exist.
   await projectFor(res, item.project_id).catch(() => {
@@ -45,15 +45,15 @@ billingRoutes.post('/projects/:id/change-orders', requireRole('builder'), async 
   const description = longText(req.body?.description)
   const amount = amountFrom(req.body?.amount, { allowZero: true, allowNegative: true })
   const days = req.body?.days == null || req.body.days === '' ? 0 : wholeFrom(req.body.days, -CHANGE_DAYS_MAX, CHANGE_DAYS_MAX)
-  if (!title || title.length > TITLE_MAX) return badRequest(res, 'Give the change a short title.')
-  if (!description) return badRequest(res, 'Describe what changes.')
+  if (!title || title.length > TITLE_MAX) return badRequest(res, (m) => m.changes.enterTitle)
+  if (!description) return badRequest(res, (m) => m.changes.enterDescription)
   if (description.length > DESCRIPTION_MAX) {
-    return badRequest(res, `Keep the description under ${DESCRIPTION_MAX.toLocaleString('en')} characters.`)
+    return badRequest(res, (m) => m.general.descriptionTooLong)
   }
-  if (amount === null) return badRequest(res, 'Enter how much the price changes: 0 if it stays the same.')
-  if (days === null) return badRequest(res, `The schedule change should be a whole number of days, up to ${CHANGE_DAYS_MAX}.`)
+  if (amount === null) return badRequest(res, (m) => m.changes.enterAmount)
+  if (days === null) return badRequest(res, (m) => m.changes.daysWhole)
   const money = await moneyOf(project)
-  if (money.total + amount < 0) return badRequest(res, "A change can't take the price below zero.")
+  if (money.total + amount < 0) return badRequest(res, (m) => m.changes.belowZero)
 
   await db.execute('INSERT INTO change_orders (project_id, title, description, amount, days) VALUES (?, ?, ?, ?, ?)', [
     project.id,
@@ -72,7 +72,7 @@ async function decide(id: number, status: 'approved' | 'declined' | 'withdrawn')
     "UPDATE change_orders SET status = ?, decided_at = NOW() WHERE id = ? AND status = 'pending'",
     [status, id],
   )
-  if (result.affectedRows === 0) throw conflict('This change order has already been answered.')
+  if (result.affectedRows === 0) throw conflict((m) => m.changes.alreadyAnswered)
 }
 
 for (const [action, status] of [
@@ -102,19 +102,18 @@ billingRoutes.post('/projects/:id/invoices', requireRole('builder'), async (req,
   const title = text(req.body?.title)
   const amount = amountFrom(req.body?.amount)
   const dueDate = dateFrom(req.body?.dueDate)
-  if (!title || title.length > TITLE_MAX) return badRequest(res, 'Say what the invoice is for, like "Deposit".')
-  if (amount === null) return badRequest(res, 'Enter the amount to bill.')
-  if (!dueDate) return badRequest(res, 'Choose when the invoice is due.')
+  if (!title || title.length > TITLE_MAX) return badRequest(res, (m) => m.invoices.enterTitle)
+  if (amount === null) return badRequest(res, (m) => m.invoices.enterAmount)
+  if (!dueDate) return badRequest(res, (m) => m.invoices.chooseDueDate)
 
   await inTransaction(async (conn) => {
     // Locks the project, so two invoices sent at once can't both use what's left.
     await conn.execute('SELECT id FROM projects WHERE id = ? FOR UPDATE', [project.id])
     const money = await moneyOf(project)
     if (amount > money.leftToInvoice) {
+      const left = money.leftToInvoice
       throw conflict(
-        money.leftToInvoice > 0
-          ? `That's more than is left to invoice (${formatMoney(money.leftToInvoice)}).`
-          : 'Everything on this project has been invoiced already. Send a change order for extra work.',
+        left > 0 ? (m) => m.invoices.moreThanLeft(left, project.currency) : (m) => m.invoices.allInvoiced,
       )
     }
     await conn.execute(
@@ -137,7 +136,7 @@ for (const [action, status] of [
       `UPDATE invoices SET status = ?, paid_at = ${status === 'paid' ? 'NOW()' : 'NULL'} WHERE id = ? AND status = 'due'`,
       [status, item.id],
     )
-    if (result.affectedRows === 0) throw conflict('This invoice is already paid or void.')
+    if (result.affectedRows === 0) throw conflict((m) => m.invoices.alreadyClosed)
     publish(project.client_id, { type: 'project', projectId: project.id })
     res.json({ project: await view(project.id, 'builder') })
   })

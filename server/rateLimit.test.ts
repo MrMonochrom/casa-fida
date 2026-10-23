@@ -75,8 +75,8 @@ describe('Limiter', () => {
 })
 
 describe('tooManyAttempts', () => {
-  function fakeResponse() {
-    const res = { set: vi.fn(), status: vi.fn(), json: vi.fn() }
+  function fakeResponse(cookie?: string) {
+    const res = { req: { headers: { cookie } }, set: vi.fn(), status: vi.fn(), json: vi.fn() }
     res.status.mockReturnValue(res)
     return res
   }
@@ -91,6 +91,19 @@ describe('tooManyAttempts', () => {
     tooManyAttempts(res as unknown as Response, seconds)
     expect(res.set).toHaveBeenCalledWith('Retry-After', String(seconds))
     expect(res.status).toHaveBeenCalledWith(429)
+    expect(res.json).toHaveBeenCalledWith({ error: message })
+  })
+
+  it.each([
+    ['ro', 60, 'Prea multe încercări. Încercați din nou peste 1 minut.'],
+    ['ro', 900, 'Prea multe încercări. Încercați din nou peste 15 minute.'],
+    ['ro', 1800, 'Prea multe încercări. Încercați din nou peste 30 de minute.'],
+    ['ru', 60, 'Слишком много попыток. Попробуйте снова через 1 минуту.'],
+    ['ru', 180, 'Слишком много попыток. Попробуйте снова через 3 минуты.'],
+    ['ru', 900, 'Слишком много попыток. Попробуйте снова через 15 минут.'],
+  ])('answers in the app language (%s, %i seconds)', (language, seconds, message) => {
+    const res = fakeResponse(`cf_lang=${language}`)
+    tooManyAttempts(res as unknown as Response, seconds)
     expect(res.json).toHaveBeenCalledWith({ error: message })
   })
 })

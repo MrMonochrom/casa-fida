@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { useT } from '../i18n'
 
 interface Props {
   title: string
@@ -11,6 +12,7 @@ interface Props {
 
 /** A panel over the page. Closes with Escape or a click outside, and keeps focus inside while open. */
 export function Dialog({ title, onClose, children, wide = false }: Props) {
+  const t = useT()
   const titleId = useId()
   const panel = useRef<HTMLDivElement>(null)
   const latestOnClose = useRef(onClose)
@@ -51,7 +53,7 @@ export function Dialog({ title, onClose, children, wide = false }: Props) {
           <h2 id={titleId} className="modal__title">
             {title}
           </h2>
-          <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
+          <button type="button" className="icon-button" aria-label={t.common.close} onClick={onClose}>
             ×
           </button>
         </div>

@@ -19,8 +19,9 @@ describe('JobForm', () => {
     await userEvent.selectOptions(screen.getByLabelText('Kind of work'), 'basements_attics')
     await userEvent.type(screen.getByLabelText('Where'), 'Littleton, CO')
     await userEvent.type(screen.getByLabelText('Describe the work'), 'Family room and a guest bedroom.')
+    await userEvent.selectOptions(screen.getByLabelText('Currency'), 'EUR')
     await userEvent.type(screen.getByLabelText(/Budget from/), '30,000')
-    await userEvent.type(screen.getByLabelText(/Budget up to/), '$45000')
+    await userEvent.type(screen.getByLabelText(/Budget up to/), '€45000')
     await userEvent.selectOptions(screen.getByLabelText('When would you like to start?'), 'asap')
     await userEvent.click(screen.getByRole('button', { name: 'Post job' }))
 
@@ -29,6 +30,7 @@ describe('JobForm', () => {
       trade: 'basements_attics',
       location: 'Littleton, CO',
       description: 'Family room and a guest bedroom.',
+      currency: 'EUR',
       budgetMin: 3_000_000,
       budgetMax: 4_500_000,
       timing: 'asap',
@@ -71,5 +73,29 @@ describe('JobForm', () => {
     renderAs(makeUser(), <JobForm id={9} />)
     expect(await screen.findByText(/Only jobs that are still taking quotes can be changed/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument()
+  })
+})
+
+describe('JobForm currency', () => {
+  it('starts a new job in the currency used last', async () => {
+    vi.mocked(api.postJob).mockResolvedValue(makeJob({ id: 61 }))
+    const first = renderAs(makeUser(), <JobForm />)
+    await userEvent.selectOptions(await screen.findByLabelText('Currency'), 'MDL')
+    expect(screen.getByLabelText(/Budget from/).previousSibling).toHaveTextContent('MDL')
+    await userEvent.click(screen.getByRole('button', { name: 'Post job' }))
+    expect(api.postJob).toHaveBeenCalledWith(expect.objectContaining({ currency: 'MDL' }))
+    first.unmount()
+
+    renderAs(makeUser(), <JobForm />)
+    expect(await screen.findByLabelText('Currency')).toHaveValue('MDL')
+  })
+
+  it("can't change once builders have quoted", async () => {
+    vi.mocked(api.jobWithQuotes).mockResolvedValue({ job: makeJob({ id: 9, currency: 'RON', quoteCount: 2 }), quotes: [] })
+    renderAs(makeUser(), <JobForm id={9} />)
+    const currency = await screen.findByLabelText('Currency')
+    expect(currency).toHaveValue('RON')
+    expect(currency).toBeDisabled()
+    expect(screen.getByText('Builders have already quoted in this currency.')).toBeInTheDocument()
   })
 })

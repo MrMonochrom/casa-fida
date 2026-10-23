@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
+import { useT } from '../i18n'
 import { navigate } from '../router'
 
 interface Props {
@@ -10,7 +11,8 @@ interface Props {
 }
 
 /** Opens the conversation with someone (starting it if needed) in Messages. */
-export function MessageButton({ userId, label = 'Message', className = 'button button--secondary' }: Props) {
+export function MessageButton({ userId, label, className = 'button button--secondary' }: Props) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,7 +31,7 @@ export function MessageButton({ userId, label = 'Message', className = 'button b
   return (
     <>
       <button type="button" className={className} onClick={open} disabled={busy}>
-        {busy ? 'Opening…' : label}
+        {busy ? t.common.opening : (label ?? t.common.message)}
       </button>
       {error && (
         <span className="inline-error" role="alert">

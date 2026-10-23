@@ -1,4 +1,5 @@
 import type { Response } from 'express'
+import { fail } from './validate.ts'
 
 const limiters = new Set<Limiter>()
 
@@ -56,9 +57,7 @@ const MINUTE = 60 * 1000
 export function tooManyAttempts(res: Response, seconds: number) {
   const minutes = Math.max(1, Math.ceil(seconds / 60))
   res.set('Retry-After', String(seconds))
-  res.status(429).json({
-    error: `Too many attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
-  })
+  fail(res, 429, (m) => m.general.tooManyAttempts(minutes))
 }
 
 // The limits themselves, in one place.

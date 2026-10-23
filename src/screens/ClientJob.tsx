@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { formatMoney } from '../../shared/money'
 import { api } from '../api'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { JobDetails } from '../components/JobDetails'
 import { MessageButton } from '../components/MessageButton'
 import { Avatar, BackLink, Empty, Loading, PageHeader, Rating, StatusPill } from '../components/ui'
-import { QUOTE_STATUS, ago, plural, weeksText } from '../format'
+import { ago, formatMoney, quoteStatus, weeksText } from '../format'
+import { fill, getT, useT } from '../i18n'
 import { Link } from '../components/Link'
 import { navigate } from '../router'
 import { useServerEvents } from '../serverEvents'
@@ -17,9 +17,10 @@ type Pending = { action: 'accept' | 'decline'; quote: Quote } | { action: 'close
 
 /** A client's job: its details and the quotes builders sent, to compare and hire from. */
 export function ClientJob({ id }: { id: number | null }) {
+  const t = useT()
   const { refreshSummary } = useSession()
   const { data, error, reload } = useResource(
-    () => (id ? api.jobWithQuotes(id) : Promise.reject(new Error("This job doesn't exist."))),
+    () => (id ? api.jobWithQuotes(id) : Promise.reject(new Error(getT().jobs.gone))),
     String(id),
   )
   const [pending, setPending] = useState<Pending>(null)
@@ -31,7 +32,7 @@ export function ClientJob({ id }: { id: number | null }) {
   if (!data) {
     return (
       <>
-        <BackLink to="/jobs">My jobs</BackLink>
+        <BackLink to="/jobs">{t.nav.myJobs}</BackLink>
         <Loading error={error} onRetry={reload} />
       </>
     )
@@ -59,17 +60,17 @@ export function ClientJob({ id }: { id: number | null }) {
 
   return (
     <>
-      <BackLink to="/jobs">My jobs</BackLink>
+      <BackLink to="/jobs">{t.nav.myJobs}</BackLink>
       <PageHeader
         title={job.title}
         actions={
           open && (
             <>
               <Link to={`/jobs/${job.id}/edit`} className="button button--secondary">
-                Edit
+                {t.common.edit}
               </Link>
               <button type="button" className="button button--secondary" onClick={() => setPending({ action: 'close' })}>
-                Close job
+                {t.jobs.closeJob}
               </button>
             </>
           )
@@ -78,34 +79,34 @@ export function ClientJob({ id }: { id: number | null }) {
 
       {job.status === 'hired' && job.projectId && (
         <div className="banner banner--success">
-          <p>
-            You hired <strong>{hired?.builder.businessName ?? 'a builder'}</strong> for this job.
-          </p>
+          <p>{fill(t.jobs.hired, { builder: <strong>{hired?.builder.businessName ?? t.jobs.aBuilder}</strong> })}</p>
           <Link to={`/projects/${job.projectId}`} className="button button--primary">
-            Go to the project
+            {t.common.goToProject}
           </Link>
         </div>
       )}
 
       <div className="two-col two-col--wide-right">
         <section className="section">
-          <h2 className="section__title">The job</h2>
+          <h2 className="section__title">{t.common.theJob}</h2>
           <JobDetails job={job} />
         </section>
 
         <section className="section">
           <h2 className="section__title">
-            {quotes.length ? plural(quotes.length, 'quote') : 'Quotes'}
+            {quotes.length ? t.counts.quotes(quotes.length) : t.jobs.quotesHeading}
           </h2>
           {quotes.length === 0 ? (
-            <Empty title={open ? 'No quotes yet.' : 'No quotes.'}>
+            <Empty title={open ? t.jobs.noQuotesYet : t.jobs.noQuotes}>
               {open && (
                 <p className="muted">
-                  Builders who offer this kind of work can see your job. You'll be notified here when a quote arrives.{' '}
-                  <Link to="/builders" className="text-link">
-                    Browse builders
-                  </Link>{' '}
-                  to invite one to quote.
+                  {fill(t.jobs.noQuotesText, {
+                    browse: (
+                      <Link to="/builders" className="text-link">
+                        {t.jobs.browseBuilders}
+                      </Link>
+                    ),
+                  })}
                 </p>
               )}
             </Empty>
@@ -127,25 +128,18 @@ export function ClientJob({ id }: { id: number | null }) {
 
       {pending?.action === 'accept' && (
         <ConfirmDialog
-          title={`Hire ${pending.quote.builder.businessName}?`}
-          message={
-            <>
-              <p>
-                This accepts their quote of <strong>{formatMoney(pending.quote.amount)}</strong> and starts the project.
-                Any other quotes on this job are declined, and the job stops taking new ones.
-              </p>
-            </>
-          }
-          confirmLabel="Accept and hire"
+          title={t.jobs.hireTitle(pending.quote.builder.businessName)}
+          message={<p>{fill(t.jobs.hireText, { amount: <strong>{formatMoney(pending.quote.amount, pending.quote.currency)}</strong> })}</p>}
+          confirmLabel={t.jobs.acceptAndHire}
           onConfirm={confirm}
           onCancel={() => setPending(null)}
         />
       )}
       {pending?.action === 'decline' && (
         <ConfirmDialog
-          title="Decline this quote?"
-          message={`${pending.quote.builder.businessName} will see that you declined it. Your job stays open for other quotes.`}
-          confirmLabel="Decline quote"
+          title={t.jobs.declineTitle}
+          message={t.jobs.declineText(pending.quote.builder.businessName)}
+          confirmLabel={t.jobs.declineQuote}
           danger
           onConfirm={confirm}
           onCancel={() => setPending(null)}
@@ -153,9 +147,9 @@ export function ClientJob({ id }: { id: number | null }) {
       )}
       {pending?.action === 'close' && (
         <ConfirmDialog
-          title="Close this job?"
-          message="Builders won't be able to send quotes any more, and quotes still waiting for an answer are declined."
-          confirmLabel="Close job"
+          title={t.jobs.closeTitle}
+          message={t.jobs.closeText}
+          confirmLabel={t.jobs.closeJob}
           danger
           onConfirm={confirm}
           onCancel={() => setPending(null)}
@@ -173,6 +167,7 @@ interface QuoteCardProps {
 }
 
 function QuoteCard({ quote, canAnswer, onAccept, onDecline }: QuoteCardProps) {
+  const t = useT()
   const { builder } = quote
   return (
     <li className={`card quote ${quote.status === 'accepted' ? 'quote--accepted' : ''}`}>
@@ -185,28 +180,30 @@ function QuoteCard({ quote, canAnswer, onAccept, onDecline }: QuoteCardProps) {
           </span>
         </Link>
         <div className="quote__price">
-          <strong>{formatMoney(quote.amount)}</strong>
-          {quote.weeks && <span className="muted small">about {weeksText(quote.weeks)}</span>}
+          <strong>{formatMoney(quote.amount, quote.currency)}</strong>
+          {quote.weeks && <span className="muted small">{t.jobs.aboutWeeks(weeksText(quote.weeks))}</span>}
         </div>
       </div>
       <div className="quote__meta">
         <Rating rating={builder.rating} count={builder.reviewCount} />
-        {builder.licensed && <span className="fact">Licensed</span>}
-        {builder.insured && <span className="fact">Insured</span>}
-        <StatusPill look={QUOTE_STATUS[quote.status]} />
+        {builder.licensed && <span className="fact">{t.common.licensed}</span>}
+        {builder.insured && <span className="fact">{t.common.insured}</span>}
+        <StatusPill look={quoteStatus(quote.status)} />
       </div>
       <p className="prewrap">{quote.message}</p>
       <p className="muted small">
-        {quote.updatedAt - quote.createdAt > 60_000 ? `Updated ${ago(quote.updatedAt)}` : `Sent ${ago(quote.createdAt)}`}
+        {quote.updatedAt - quote.createdAt > 60_000
+          ? t.jobs.quoteUpdated(ago(quote.updatedAt))
+          : t.jobs.quoteSentCap(ago(quote.createdAt))}
       </p>
       <div className="quote__actions">
         {canAnswer && (
           <>
             <button type="button" className="button button--primary" onClick={onAccept}>
-              Accept and hire
+              {t.jobs.acceptAndHire}
             </button>
             <button type="button" className="button button--secondary" onClick={onDecline}>
-              Decline
+              {t.common.decline}
             </button>
           </>
         )}

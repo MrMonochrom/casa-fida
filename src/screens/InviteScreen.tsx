@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { LanguagePicker } from '../components/LanguagePicker'
 import { Logo } from '../components/Logo'
 import { FormError, Loading } from '../components/ui'
+import { fill, useT } from '../i18n'
 import type { InvitePreview, User } from '../types'
 import { AuthScreen } from './AuthScreen'
 
@@ -21,6 +23,7 @@ interface Props {
  * and then adds the proposal to their account.
  */
 export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave, onLogout }: Props) {
+  const t = useT()
   const [invite, setInvite] = useState<InvitePreview | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [claimError, setClaimError] = useState<string | null>(null)
@@ -41,10 +44,10 @@ export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave,
   if (loadError) {
     body = (
       <div className="invite-card">
-        <h1 className="invite-card__title">This link doesn't work any more</h1>
+        <h1 className="invite-card__title">{t.invite.broken}</h1>
         <p>{loadError}</p>
         <button type="button" className="button button--primary" onClick={onLeave}>
-          Go to Casa Fida
+          {t.invite.goToCasaFida}
         </button>
       </div>
     )
@@ -53,12 +56,18 @@ export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave,
   } else {
     const intro = (
       <div className="invite-card">
-        <p className="eyebrow">Project proposal</p>
+        <p className="eyebrow">{t.invite.eyebrow}</p>
         <h1 className="invite-card__title">{invite.title}</h1>
         <p>
-          <strong>{invite.businessName}</strong>
-          {invite.builderName !== invite.businessName && ` (${invite.builderName})`} sent you a proposal on
-          Casa Fida. {user ? '' : 'Create a free account to see the price and details, and accept or decline it.'}
+          {fill(t.invite.sentYou, {
+            from: (
+              <>
+                <strong>{invite.businessName}</strong>
+                {invite.builderName !== invite.businessName && ` (${invite.builderName})`}
+              </>
+            ),
+          })}
+          {user ? '' : ` ${t.invite.signUpToSee}`}
         </p>
       </div>
     )
@@ -68,16 +77,13 @@ export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave,
     } else if (user.role === 'builder') {
       action = (
         <div className="invite-card">
-          <p>
-            You're logged in as a builder ({user.email}). Proposals are for client accounts: log out, then open the
-            link again to sign up as a client.
-          </p>
+          <p>{t.invite.loggedInAsBuilder(user.email)}</p>
           <div className="form-actions form-actions--start">
             <button type="button" className="button button--primary" onClick={onLogout}>
-              Log out
+              {t.common.logOut}
             </button>
             <button type="button" className="button button--secondary" onClick={onLeave}>
-              Go to my account
+              {t.invite.goToMyAccount}
             </button>
           </div>
         </div>
@@ -87,7 +93,7 @@ export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave,
         <div className="invite-card">
           <FormError error={claimError} />
           <button type="button" className="button button--secondary" onClick={onLeave}>
-            Go to Casa Fida
+            {t.invite.goToCasaFida}
           </button>
         </div>
       )
@@ -106,6 +112,7 @@ export function InviteScreen({ token, user, onAuthenticated, onClaimed, onLeave,
     <div className="invite">
       <header className="invite__header">
         <Logo />
+        <LanguagePicker />
       </header>
       <main className="invite__main">{body}</main>
     </div>

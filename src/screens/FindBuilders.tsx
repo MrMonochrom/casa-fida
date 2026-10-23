@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { TRADES, TRADE_KEYS } from '../../shared/rules'
+import { TRADE_KEYS } from '../../shared/rules'
 import type { Trade } from '../../shared/rules'
 import { api } from '../api'
 import { BuilderCard } from '../components/BuilderCard'
 import { Empty, Loading, PageHeader } from '../components/ui'
-import { plural } from '../format'
+import { useT } from '../i18n'
 import { Link } from '../components/Link'
 import { useSession } from '../session'
 import { useResource } from '../useResource'
@@ -14,6 +14,7 @@ const SEARCH_DELAY_MS = 300
 
 /** Builders with a profile, best rated first, filtered by trade and a search. */
 export function FindBuilders() {
+  const t = useT()
   const { user } = useSession()
   const [typed, setTyped] = useState('')
   const [q, setQ] = useState('')
@@ -29,12 +30,12 @@ export function FindBuilders() {
   return (
     <>
       <PageHeader
-        title="Find a builder"
-        subtitle="Compare local builders by their reviews and past work, then message them or post a job for quotes."
+        title={t.builders.title}
+        subtitle={t.builders.subtitle}
         actions={
           user.role === 'client' && (
             <Link to="/jobs/new" className="button button--primary">
-              Post a job
+              {t.common.postJob}
             </Link>
           )
         }
@@ -43,21 +44,21 @@ export function FindBuilders() {
         <input
           className="input"
           type="search"
-          placeholder="Search by name or area"
-          aria-label="Search builders"
+          placeholder={t.builders.searchPlaceholder}
+          aria-label={t.builders.searchLabel}
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
         />
         <select
           className="input select"
-          aria-label="Trade"
+          aria-label={t.builders.trade}
           value={trade}
           onChange={(e) => setTrade(e.target.value as Trade | '')}
         >
-          <option value="">All trades</option>
+          <option value="">{t.builders.allTrades}</option>
           {TRADE_KEYS.map((key) => (
             <option key={key} value={key}>
-              {TRADES[key]}
+              {t.trades[key]}
             </option>
           ))}
         </select>
@@ -66,13 +67,13 @@ export function FindBuilders() {
       {!builders ? (
         <Loading error={error} onRetry={reload} />
       ) : builders.length === 0 ? (
-        <Empty title="No builders match that search.">
-          <p className="muted">Try another trade or a nearby town.</p>
+        <Empty title={t.builders.noMatch}>
+          <p className="muted">{t.builders.noMatchText}</p>
         </Empty>
       ) : (
         <>
           <p className="muted result-count" role="status">
-            {plural(builders.length, 'builder')}
+            {t.counts.builders(builders.length)}
           </p>
           <div className="card-grid">
             {builders.map((builder) => (

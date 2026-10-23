@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import { Icon } from './components/Icon'
+import { LanguagePicker } from './components/LanguagePicker'
 import type { IconName } from './components/Icon'
 import { Logo } from './components/Logo'
 import { CountBadge, Empty } from './components/ui'
 import { Link } from './components/Link'
+import { useT } from './i18n'
+import type { Messages as Words } from './i18n'
 import { idParam, matchPath, usePath } from './router'
 import { Account } from './screens/Account'
 import { BuilderJob } from './screens/BuilderJob'
@@ -40,39 +43,44 @@ interface NavItem {
   shortLabel?: string
   icon: IconName
   count?: number
-  countLabel?: string
+  /** What the count means, for screen readers: "3 unread messages". */
+  countLabel?: (count: number) => string
 }
 
-function navFor(user: User, summary: Summary | null): NavItem[] {
-  const messages: NavItem = {
-    to: '/messages',
-    label: 'Messages',
-    icon: 'chat',
+function navFor(user: User, summary: Summary | null, t: Words): NavItem[] {
+  const nav = t.nav
+  // A short label only where the full one differs, so screen readers aren't given both.
+  const item = (to: string, label: string, short: string, icon: IconName, more: Partial<NavItem> = {}): NavItem => ({
+    to,
+    label,
+    shortLabel: short !== label ? short : undefined,
+    icon,
+    ...more,
+  })
+  const messages = item('/messages', nav.messages, nav.short.messages, 'chat', {
     count: summary?.unreadMessages,
-    countLabel: 'unread messages',
-  }
+    countLabel: nav.unreadMessages,
+  })
+  const account = item('/account', nav.account, nav.short.account, 'user')
   if (user.role === 'client') {
     return [
-      { to: '/', label: 'Home', icon: 'home' },
-      { to: '/builders', label: 'Find builders', shortLabel: 'Builders', icon: 'search' },
-      { to: '/jobs', label: 'My jobs', icon: 'briefcase', count: summary?.jobs, countLabel: 'quotes to answer' },
-      {
-        to: '/projects',
-        label: 'Projects',
-        icon: 'folder',
+      item('/', nav.home, nav.short.home, 'home'),
+      item('/builders', nav.findBuilders, nav.short.builders, 'search'),
+      item('/jobs', nav.myJobs, nav.short.myJobs, 'briefcase', { count: summary?.jobs, countLabel: nav.quotesToAnswer }),
+      item('/projects', nav.projects, nav.short.projects, 'folder', {
         count: summary?.projects,
-        countLabel: 'things waiting for you',
-      },
+        countLabel: nav.thingsWaiting,
+      }),
       messages,
-      { to: '/account', label: 'Account', icon: 'user' },
+      account,
     ]
   }
   return [
-    { to: '/', label: 'Home', icon: 'home' },
-    { to: '/jobs', label: 'Find work', icon: 'briefcase', count: summary?.jobs, countLabel: 'new jobs in your trades' },
-    { to: '/projects', label: 'Projects', icon: 'folder' },
+    item('/', nav.home, nav.short.home, 'home'),
+    item('/jobs', t.common.findWork, nav.short.findWork, 'briefcase', { count: summary?.jobs, countLabel: nav.newJobs }),
+    item('/projects', nav.projects, nav.short.projects, 'folder'),
     messages,
-    { to: '/account', label: 'Account', icon: 'user' },
+    account,
   ]
 }
 
@@ -83,6 +91,7 @@ const isActive = (item: NavItem, path: string) =>
 
 /** The page for the current address. */
 function Screen({ path, user }: { path: string; user: User }) {
+  const t = useT()
   const client = user.role === 'client'
   let m: Record<string, string> | null
 
@@ -108,9 +117,9 @@ function Screen({ path, user }: { path: string; user: User }) {
   if (path === '/account') return <Account />
 
   return (
-    <Empty title="There's nothing at this address.">
+    <Empty title={t.nav.nothingHere}>
       <Link to="/" className="button button--secondary">
-        Go to the home page
+        {t.nav.goHome}
       </Link>
     </Empty>
   )
@@ -118,6 +127,7 @@ function Screen({ path, user }: { path: string; user: User }) {
 
 /** The logged-in app: the menu, and the page for the current address. */
 export default function App({ user, onUserChange, onLogout }: Props) {
+  const t = useT()
   const path = usePath()
   const [summary, setSummary] = useState<Summary | null>(null)
 
@@ -142,17 +152,17 @@ export default function App({ user, onUserChange, onLogout }: Props) {
     () => ({ user, onUserChange, onLogout, refreshSummary }),
     [user, onUserChange, onLogout, refreshSummary],
   )
-  const items = navFor(user, summary)
+  const items = navFor(user, summary, t)
 
   return (
     <SessionContext.Provider value={session}>
       <div className="app">
         <header className="topbar">
           <div className="topbar__inner">
-            <Link to="/" className="topbar__logo" aria-label="Casa Fida home">
+            <Link to="/" className="topbar__logo" aria-label={t.nav.logoHome}>
               <Logo small />
             </Link>
-            <nav className="nav" aria-label="Main">
+            <nav className="nav" aria-label={t.nav.main}>
               {items.map((item) => {
                 const active = isActive(item, path)
                 return (
@@ -173,11 +183,12 @@ export default function App({ user, onUserChange, onLogout }: Props) {
                     ) : (
                       <span className="nav__label">{item.label}</span>
                     )}
-                    {item.count ? <CountBadge count={item.count} label={`${item.count} ${item.countLabel}`} /> : null}
+                    {item.count ? <CountBadge count={item.count} label={item.countLabel?.(item.count) ?? ''} /> : null}
                   </Link>
                 )
               })}
             </nav>
+            <LanguagePicker compact className="topbar__language" />
           </div>
         </header>
         <main className="main">

@@ -442,6 +442,7 @@ describe('GET /api/projects', () => {
       title: 'Active one',
       status: 'active',
       address: '1 Main St',
+      currency: 'USD',
       startDate: '2026-12-01',
       createdAt: expect.any(Number),
       builder: { id: bob.user.id, name: bob.name, businessName: 'Bob Builds' },

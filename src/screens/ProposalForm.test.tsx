@@ -40,6 +40,7 @@ describe('ProposalForm', () => {
       title: 'Kitchen remodel',
       description: 'Cabinets and counters.',
       address: '',
+      currency: 'USD',
       contractAmount: 4_680_000,
       startDate: '2026-11-13',
       stages: ['Demolition', 'Cabinets & counters', 'Painting & finishes'],

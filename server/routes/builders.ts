@@ -12,7 +12,7 @@ import type { Trade } from '../../shared/rules.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { me, requireRole, requireUser } from '../session.ts'
 import { loadUser, ownAccount, shortName, tradesFrom } from '../users.ts'
-import { badRequest, fail, idFrom, longText, text, wholeFrom } from '../validate.ts'
+import { badRequest, fail, idFrom, invalid, longText, text, wholeFrom } from '../validate.ts'
 
 export const builderRoutes = express.Router()
 
@@ -28,20 +28,20 @@ function readProfile(body: Record<string, unknown>) {
   const licenseNumber = text(body.licenseNumber)
   const trades = Array.isArray(body.trades) ? [...new Set(body.trades)] : []
 
-  if (!businessName || businessName.length > BUSINESS_NAME_MAX) return { error: "Please enter your business's name." }
-  if (headline.length > HEADLINE_MAX) return { error: `Keep the headline under ${HEADLINE_MAX} characters.` }
-  if (!about) return { error: 'Tell clients a little about your business.' }
-  if (about.length > ABOUT_MAX) return { error: `Keep "About" under ${ABOUT_MAX.toLocaleString('en')} characters.` }
-  if (!serviceArea || serviceArea.length > PLACE_MAX) return { error: 'Please enter the area you work in.' }
+  if (!businessName || businessName.length > BUSINESS_NAME_MAX) return invalid((m) => m.builders.enterBusinessName)
+  if (headline.length > HEADLINE_MAX) return invalid((m) => m.builders.headlineTooLong)
+  if (!about) return invalid((m) => m.builders.enterAbout)
+  if (about.length > ABOUT_MAX) return invalid((m) => m.builders.aboutTooLong)
+  if (!serviceArea || serviceArea.length > PLACE_MAX) return invalid((m) => m.builders.enterArea)
   if (trades.length === 0 || trades.length > MAX_TRADES || !trades.every(isTrade)) {
-    return { error: `Choose between 1 and ${MAX_TRADES} trades.` }
+    return invalid((m) => m.builders.chooseTrades)
   }
   let yearsInBusiness: number | null = null
   if (body.yearsInBusiness !== null && body.yearsInBusiness !== undefined && body.yearsInBusiness !== '') {
     yearsInBusiness = wholeFrom(body.yearsInBusiness, 0, 150)
-    if (yearsInBusiness === null) return { error: 'Years in business should be a whole number.' }
+    if (yearsInBusiness === null) return invalid((m) => m.builders.yearsWhole)
   }
-  if (licenseNumber.length > LICENSE_MAX) return { error: 'That license number is too long.' }
+  if (licenseNumber.length > LICENSE_MAX) return invalid((m) => m.builders.licenseTooLong)
 
   return {
     businessName,
@@ -58,7 +58,7 @@ function readProfile(body: Record<string, unknown>) {
 // Creates or replaces your business profile. You appear in search once you have one.
 builderRoutes.put('/me/builder-profile', requireRole('builder'), async (req, res) => {
   const input = readProfile(req.body ?? {})
-  if ('error' in input) return badRequest(res, input.error!)
+  if ('error' in input) return badRequest(res, input.error)
   const userId = me(res).id
 
   await inTransaction(async (conn) => {
@@ -141,7 +141,7 @@ const likePattern = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
 builderRoutes.get('/builders', requireUser, async (req, res) => {
   const trade = text(req.query.trade)
   const q = text(req.query.q).slice(0, SEARCH_MAX)
-  if (trade && !isTrade(trade)) return badRequest(res, 'Unknown trade.')
+  if (trade && !isTrade(trade)) return badRequest(res, (m) => m.builders.unknownTrade)
 
   const where: string[] = []
   const params: string[] = []
@@ -194,7 +194,7 @@ builderRoutes.get('/builders/:id', requireUser, async (req, res) => {
   const id = idFrom(req.params.id)
   const [rows] = id ? await db.execute<CardRow[]>(`${CARD_SELECT} WHERE u.id = ?`, [id]) : [[]]
   const row = rows[0]
-  if (!row) return fail(res, 404, "This builder doesn't have a profile.")
+  if (!row) return fail(res, 404, (m) => m.builders.noProfile)
   res.json({
     builder: { ...toCard(row), about: row.about, licenseNumber: row.license_number, reviews: await reviewsOf(row.id) },
   })

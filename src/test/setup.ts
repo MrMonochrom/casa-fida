@@ -1,10 +1,13 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach, vi } from 'vitest'
+import { setLanguage } from '../i18n'
 import { FakeEventSource } from './fakeEventSource'
 
 afterEach(() => {
   cleanup()
+  setLanguage('en')
+  localStorage.removeItem('cf_currency')
   FakeEventSource.instances = []
   window.history.replaceState(null, '', '/')
 })

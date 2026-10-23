@@ -3,7 +3,8 @@ import type { FormEvent, KeyboardEvent } from 'react'
 import { MESSAGE_MAX } from '../../shared/rules'
 import { api } from '../api'
 import { Avatar, Empty, FormError, Loading } from '../components/ui'
-import { dayText, differentDays, timeText } from '../format'
+import { dateTimeText, dayText, differentDays, timeText } from '../format'
+import { fill, useT } from '../i18n'
 import { Link } from '../components/Link'
 import { useServerEvents } from '../serverEvents'
 import { useSession } from '../session'
@@ -20,6 +21,7 @@ function displayName(other: Conversation['other']) {
 
 /** Your conversations, and the one that's open (if any). */
 export function Messages({ id }: { id: number | null }) {
+  const t = useT()
   const { user } = useSession()
   const { data: conversations, error, reload } = useResource(() => api.conversations(), 'conversations')
 
@@ -31,23 +33,22 @@ export function Messages({ id }: { id: number | null }) {
 
   return (
     <div className={`messages ${id ? 'messages--open' : ''}`}>
-      <aside className="messages__list" aria-label="Conversations">
-        <h1 className="page-title messages__title">Messages</h1>
+      <aside className="messages__list" aria-label={t.messages.conversations}>
+        <h1 className="page-title messages__title">{t.messages.title}</h1>
         {!conversations ? (
           <Loading error={error} onRetry={reload} />
         ) : conversations.length === 0 ? (
-          <Empty title="No conversations yet.">
+          <Empty title={t.messages.none}>
             <p className="muted">
-              {user.role === 'client' ? (
-                <>
-                  <Link to="/builders" className="text-link">
-                    Find a builder
-                  </Link>{' '}
-                  and message them, or post a job and talk to the builders who quote.
-                </>
-              ) : (
-                'Clients can message you from your profile. You can message clients once you’ve quoted for them.'
-              )}
+              {user.role === 'client'
+                ? fill(t.messages.noneClient, {
+                    link: (
+                      <Link to="/builders" className="text-link">
+                        {t.messages.noneClientLink}
+                      </Link>
+                    ),
+                  })
+                : t.messages.noneBuilder}
             </p>
           </Empty>
         ) : (
@@ -66,11 +67,15 @@ export function Messages({ id }: { id: number | null }) {
                       {c.lastMessage && <span className="muted small">{dayOrTime(c.lastMessage.sentAt)}</span>}
                     </span>
                     <span className={`conversation__preview ${c.unread ? 'conversation__preview--unread' : ''}`}>
-                      {c.lastMessage ? `${c.lastMessage.fromMe ? 'You: ' : ''}${c.lastMessage.text}` : 'No messages yet'}
+                      {c.lastMessage
+                        ? c.lastMessage.fromMe
+                          ? t.messages.you(c.lastMessage.text)
+                          : c.lastMessage.text
+                        : t.messages.noMessages}
                     </span>
                   </span>
                   {c.unread > 0 && (
-                    <span className="count" aria-label={`${c.unread} unread`}>
+                    <span className="count" aria-label={t.messages.unread(c.unread)}>
                       {c.unread}
                     </span>
                   )}
@@ -83,7 +88,7 @@ export function Messages({ id }: { id: number | null }) {
       <section className="messages__chat">
         {id === null ? (
           <div className="messages__placeholder">
-            <p className="muted">Choose a conversation.</p>
+            <p className="muted">{t.messages.choose}</p>
           </div>
         ) : (
           <Chat key={id} conversationId={id} known={open} onActivity={reload} />
@@ -95,8 +100,7 @@ export function Messages({ id }: { id: number | null }) {
 
 /** "2:05 PM" today, otherwise "Yesterday" or a short date. */
 function dayOrTime(ms: number) {
-  const day = dayText(ms)
-  return day === 'Today' ? timeText(ms) : day
+  return differentDays(ms, Date.now()) ? dayText(ms) : timeText(ms)
 }
 
 interface ChatProps {
@@ -108,6 +112,7 @@ interface ChatProps {
 }
 
 function Chat({ conversationId, known, onActivity }: ChatProps) {
+  const t = useT()
   const { refreshSummary } = useSession()
   const [conversation, setConversation] = useState<Conversation | null>(known ?? null)
   // null until the conversation has loaded.
@@ -216,7 +221,7 @@ function Chat({ conversationId, known, onActivity }: ChatProps) {
   return (
     <div className="chat">
       <header className="chat__header">
-        <Link to="/messages" className="chat__back" aria-label="Back to conversations">
+        <Link to="/messages" className="chat__back" aria-label={t.messages.back}>
           ‹
         </Link>
         {other && (
@@ -228,7 +233,7 @@ function Chat({ conversationId, known, onActivity }: ChatProps) {
             </div>
             {other.role === 'builder' && (
               <Link to={`/builders/${other.id}`} className="text-link chat__profile">
-                Profile
+                {t.messages.profile}
               </Link>
             )}
           </>
@@ -236,18 +241,18 @@ function Chat({ conversationId, known, onActivity }: ChatProps) {
       </header>
 
       <div className="chat__messages" aria-live="polite">
-        {messages === null && !loadError && <p className="chat__intro">Loading…</p>}
-        {messages?.length === 0 && other && <p className="chat__intro">Say hello to {other.name.split(' ')[0]}.</p>}
+        {messages === null && !loadError && <p className="chat__intro">{t.common.loading}</p>}
+        {messages?.length === 0 && other && <p className="chat__intro">{t.messages.sayHello(other.name.split(' ')[0])}</p>}
         {messages?.map((m, i) => (
           <Fragment key={m.id}>
             {(i === 0 || differentDays(messages[i - 1].sentAt, m.sentAt)) && (
               <p className="chat__day">{dayText(m.sentAt)}</p>
             )}
-            <p className={`bubble bubble--${m.fromMe ? 'me' : 'them'}`} title={new Date(m.sentAt).toLocaleString()}>
+            <p className={`bubble bubble--${m.fromMe ? 'me' : 'them'}`} title={dateTimeText(m.sentAt)}>
               {m.text}
               <span className="bubble__time">{timeText(m.sentAt)}</span>
             </p>
-            {m.id === lastMineId && seenUpTo !== null && seenUpTo >= m.id && <p className="chat__seen">Seen</p>}
+            {m.id === lastMineId && seenUpTo !== null && seenUpTo >= m.id && <p className="chat__seen">{t.messages.seen}</p>}
           </Fragment>
         ))}
         <div ref={bottom} />
@@ -263,12 +268,12 @@ function Chat({ conversationId, known, onActivity }: ChatProps) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={other ? `Message ${other.name.split(' ')[0]}` : 'Message'}
-          aria-label="Message"
+          placeholder={other ? t.messages.messageName(other.name.split(' ')[0]) : t.messages.message}
+          aria-label={t.messages.message}
           maxLength={MESSAGE_MAX}
         />
         <button className="button button--primary" type="submit" disabled={!draft.trim() || sending}>
-          Send
+          {t.messages.send}
         </button>
       </form>
     </div>

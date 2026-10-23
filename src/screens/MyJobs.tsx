@@ -1,12 +1,14 @@
 import { api } from '../api'
 import { CountBadge, Empty, Loading, PageHeader, StatusPill } from '../components/ui'
-import { JOB_STATUS, ago, budgetText, plural, tradeLabel } from '../format'
+import { ago, budgetText, jobStatus, tradeLabel } from '../format'
+import { useT } from '../i18n'
 import { Link } from '../components/Link'
 import { useServerEvents } from '../serverEvents'
 import { useResource } from '../useResource'
 
 /** A client's jobs, newest first. */
 export function MyJobs() {
+  const t = useT()
   const { data: jobs, error, reload } = useResource(() => api.myJobs(), 'my-jobs')
 
   useServerEvents((event) => {
@@ -16,25 +18,25 @@ export function MyJobs() {
   return (
     <>
       <PageHeader
-        title="My jobs"
-        subtitle="Describe work you need done and builders in that trade can send you quotes."
+        title={t.nav.myJobs}
+        subtitle={t.jobs.myJobsSubtitle}
         actions={
           <Link to="/jobs/new" className="button button--primary">
-            Post a job
+            {t.common.postJob}
           </Link>
         }
       />
       {!jobs ? (
         <Loading error={error} onRetry={reload} />
       ) : jobs.length === 0 ? (
-        <Empty title="You haven't posted any jobs yet.">
-          <p className="muted">Post a job to get quotes from local builders, or find a builder and message them.</p>
+        <Empty title={t.jobs.noneYet}>
+          <p className="muted">{t.jobs.noneYetText}</p>
           <div className="form-actions form-actions--center">
             <Link to="/jobs/new" className="button button--primary">
-              Post a job
+              {t.common.postJob}
             </Link>
             <Link to="/builders" className="button button--secondary">
-              Find a builder
+              {t.common.findBuilder}
             </Link>
           </div>
         </Empty>
@@ -46,15 +48,16 @@ export function MyJobs() {
                 <span className="list__main">
                   <strong>{job.title}</strong>
                   <span className="muted">
-                    {tradeLabel(job.trade)} · {budgetText(job.budgetMin, job.budgetMax)} · posted {ago(job.createdAt)}
+                    {tradeLabel(job.trade)} · {budgetText(job.budgetMin, job.budgetMax, job.currency)} ·{' '}
+                    {t.jobs.posted(ago(job.createdAt))}
                   </span>
                 </span>
                 <span className="list__side">
-                  <StatusPill look={JOB_STATUS[job.status]} />
+                  <StatusPill look={jobStatus(job.status)} />
                   <span className="muted small">
-                    {plural(job.quoteCount, 'quote')}
+                    {t.counts.quotes(job.quoteCount)}
                     {job.status === 'open' && job.pendingQuotes ? (
-                      <CountBadge count={job.pendingQuotes} label={`${job.pendingQuotes} waiting for an answer`} />
+                      <CountBadge count={job.pendingQuotes} label={t.jobs.waitingForAnswer(job.pendingQuotes)} />
                     ) : null}
                   </span>
                 </span>

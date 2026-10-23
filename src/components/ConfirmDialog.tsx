@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
+import { useT } from '../i18n'
 import { Dialog } from './Dialog'
 import { FormError } from './ui'
 
@@ -16,6 +17,7 @@ interface Props {
 
 /** "Are you sure?" before accepting a quote, withdrawing a proposal, voiding an invoice… */
 export function ConfirmDialog({ title, message, confirmLabel, danger = false, onConfirm, onCancel }: Props) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,7 +38,7 @@ export function ConfirmDialog({ title, message, confirmLabel, danger = false, on
       <FormError error={error} />
       <div className="form-actions">
         <button type="button" className="button button--secondary" onClick={onCancel} disabled={busy}>
-          Cancel
+          {t.common.cancel}
         </button>
         <button
           type="button"
@@ -44,7 +46,7 @@ export function ConfirmDialog({ title, message, confirmLabel, danger = false, on
           onClick={confirm}
           disabled={busy}
         >
-          {busy ? 'One moment…' : confirmLabel}
+          {busy ? t.common.oneMoment : confirmLabel}
         </button>
       </div>
     </Dialog>

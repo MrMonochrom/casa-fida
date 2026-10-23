@@ -6,19 +6,22 @@ import { BuilderProfileForm } from '../components/BuilderProfileForm'
 import { FormError, PageHeader, TextField } from '../components/ui'
 import { dateText } from '../format'
 import { Link } from '../components/Link'
+import { useT } from '../i18n'
 import { useSession } from '../session'
 
 /** Your details, your business profile (builders), your password, and logging out. */
 export function Account() {
+  const t = useT()
   const { user, onUserChange, onLogout } = useSession()
+  const since = dateText(user.memberSince)
   return (
     <>
       <PageHeader
-        title="Account"
-        subtitle={`${user.role === 'builder' ? 'Builder' : 'Client'} account · member since ${dateText(user.memberSince)}`}
+        title={t.account.title}
+        subtitle={user.role === 'builder' ? t.account.builderSince(since) : t.account.clientSince(since)}
         actions={
           <button type="button" className="button button--secondary" onClick={onLogout}>
-            Log out
+            {t.common.logOut}
           </button>
         }
       />
@@ -26,22 +29,22 @@ export function Account() {
         {user.role === 'builder' && (
           <section className="section">
             <div className="section__header">
-              <h2 className="section__title">Business profile</h2>
+              <h2 className="section__title">{t.account.businessProfile}</h2>
               <Link to={`/builders/${user.id}`} className="text-link">
-                See it as clients do
+                {t.account.seeAsClients}
               </Link>
             </div>
             <div className="card">
-              <BuilderProfileForm user={user} onSaved={onUserChange} submitLabel="Save profile" />
+              <BuilderProfileForm user={user} onSaved={onUserChange} submitLabel={t.account.saveProfile} />
             </div>
           </section>
         )}
         <section className="section">
-          <h2 className="section__title">Your details</h2>
+          <h2 className="section__title">{t.account.yourDetails}</h2>
           <DetailsForm />
         </section>
         <section className="section">
-          <h2 className="section__title">Password</h2>
+          <h2 className="section__title">{t.common.password}</h2>
           <PasswordForm />
         </section>
       </div>
@@ -50,6 +53,7 @@ export function Account() {
 }
 
 function DetailsForm() {
+  const t = useT()
   const { user, onUserChange } = useSession()
   const [name, setName] = useState(user.name)
   const [phone, setPhone] = useState(user.phone ?? '')
@@ -75,27 +79,27 @@ function DetailsForm() {
   return (
     <form className="card form" onSubmit={handleSubmit} noValidate>
       <div className="form-row">
-        <TextField label="Name" value={name} onChange={setName} maxLength={NAME_MAX} autoComplete="name" />
+        <TextField label={t.common.name} value={name} onChange={setName} maxLength={NAME_MAX} autoComplete="name" />
         <TextField
-          label="Phone"
-          extra="(optional)"
+          label={t.common.phone}
+          extra={t.common.optional}
           type="tel"
           value={phone}
           onChange={setPhone}
           autoComplete="tel"
-          hint="Only shown to people you have a project with."
+          hint={t.account.phoneHint}
         />
       </div>
-      <TextField label="Email" value={user.email} onChange={() => {}} readOnly disabled hint="Your email can't be changed." />
+      <TextField label={t.common.email} value={user.email} onChange={() => {}} readOnly disabled hint={t.account.emailHint} />
       <FormError error={error} />
       {saved && !error && (
         <p className="form-success" role="status">
-          Saved.
+          {t.common.saved}
         </p>
       )}
       <div className="form-actions form-actions--start">
         <button type="submit" className="button button--primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Save details'}
+          {busy ? t.common.saving : t.account.saveDetails}
         </button>
       </div>
     </form>
@@ -103,6 +107,7 @@ function DetailsForm() {
 }
 
 function PasswordForm() {
+  const t = useT()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [busy, setBusy] = useState(false)
@@ -130,30 +135,30 @@ function PasswordForm() {
     <form className="card form" onSubmit={handleSubmit} noValidate>
       <div className="form-row">
         <TextField
-          label="Current password"
+          label={t.account.currentPassword}
           type="password"
           value={current}
           onChange={setCurrent}
           autoComplete="current-password"
         />
         <TextField
-          label="New password"
+          label={t.account.newPassword}
           type="password"
           value={next}
           onChange={setNext}
           autoComplete="new-password"
-          hint={`At least ${PASSWORD_MIN} characters. Other browsers you're logged in on are logged out.`}
+          hint={t.account.newPasswordHint(PASSWORD_MIN)}
         />
       </div>
       <FormError error={error} />
       {saved && !error && (
         <p className="form-success" role="status">
-          Password changed.
+          {t.account.passwordChanged}
         </p>
       )}
       <div className="form-actions form-actions--start">
         <button type="submit" className="button button--primary" disabled={busy || !current || !next}>
-          {busy ? 'Saving…' : 'Change password'}
+          {busy ? t.common.saving : t.account.changePassword}
         </button>
       </div>
     </form>

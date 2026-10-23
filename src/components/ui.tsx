@@ -1,7 +1,9 @@
 // Small building blocks used across the app.
 import { useId, useState } from 'react'
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
-import { initials } from '../format'
+import type { Currency } from '../../shared/money'
+import { currencySign, initials, ratingText } from '../format'
+import { getLocale, useT } from '../i18n'
 import type { StatusLook } from '../format'
 import { Link } from './Link'
 
@@ -22,11 +24,12 @@ export function CountBadge({ count, label }: { count: number; label: string }) {
 
 /** ★★★★☆ 4.5 (12 reviews), or "No reviews yet". */
 export function Rating({ rating, count, compact = false }: { rating: number | null; count: number; compact?: boolean }) {
-  if (rating === null || count === 0) return <span className="rating rating--none">No reviews yet</span>
+  const t = useT()
+  if (rating === null || count === 0) return <span className="rating rating--none">{t.ui.noReviews}</span>
   return (
-    <span className="rating" aria-label={`Rated ${rating} out of 5 from ${count} review${count === 1 ? '' : 's'}`}>
+    <span className="rating" aria-label={t.ui.rated(rating.toLocaleString(getLocale(), { maximumFractionDigits: 1 }), count)}>
       <Stars value={rating} />
-      <strong>{rating.toFixed(1)}</strong>
+      <strong>{ratingText(rating)}</strong>
       {!compact && <span className="muted">({count})</span>}
     </span>
   )
@@ -47,12 +50,13 @@ export function Stars({ value }: { value: number }) {
 
 /** Choosing 1 to 5 stars, as radio buttons so it works with a keyboard. */
 export function StarInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const t = useT()
   const name = useId()
   const [hover, setHover] = useState(0)
   const shown = hover || value
   return (
     <fieldset className="star-input" onMouseLeave={() => setHover(0)}>
-      <legend className="field__label">Your rating</legend>
+      <legend className="field__label">{t.ui.yourRating}</legend>
       {[1, 2, 3, 4, 5].map((n) => (
         <label key={n} className={n <= shown ? 'star-input__star star-input__star--on' : 'star-input__star'} onMouseEnter={() => setHover(n)}>
           <input
@@ -64,9 +68,7 @@ export function StarInput({ value, onChange }: { value: number; onChange: (value
             className="visually-hidden"
           />
           <span aria-hidden="true">★</span>
-          <span className="visually-hidden">
-            {n} star{n === 1 ? '' : 's'}
-          </span>
+          <span className="visually-hidden">{t.ui.stars(n)}</span>
         </label>
       ))}
     </fieldset>
@@ -97,13 +99,14 @@ export function FormError({ error }: { error: string | null | undefined }) {
 
 /** Shown while a page loads, or instead of it if loading failed. */
 export function Loading({ error, onRetry }: { error?: string | null; onRetry?: () => void }) {
+  const t = useT()
   if (error) {
     return (
       <div className="state state--error" role="alert">
         <p>{error}</p>
         {onRetry && (
           <button type="button" className="button button--secondary" onClick={onRetry}>
-            Try again
+            {t.common.tryAgain}
           </button>
         )}
       </div>
@@ -111,7 +114,7 @@ export function Loading({ error, onRetry }: { error?: string | null; onRetry?: (
   }
   return (
     <div className="state" role="status">
-      <span className="spinner" aria-hidden="true" /> Loading…
+      <span className="spinner" aria-hidden="true" /> {t.common.loading}
     </div>
   )
 }
@@ -149,6 +152,7 @@ export function PageHeader({ title, subtitle, actions }: { title: ReactNode; sub
 
 /** A bar showing how many of a project's stages are done. */
 export function Progress({ done, total }: { done: number; total: number }) {
+  const t = useT()
   const percent = total === 0 ? 0 : Math.round((done / total) * 100)
   return (
     <div className="progress">
@@ -158,12 +162,12 @@ export function Progress({ done, total }: { done: number; total: number }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}
-        aria-label="Progress"
+        aria-label={t.ui.progress}
       >
         <div className="progress__fill" style={{ width: `${percent}%` }} />
       </div>
       <span className="progress__text">
-        {total === 0 ? 'No stages yet' : `${done} of ${total} stages done`}
+        {total === 0 ? t.ui.noStages : t.ui.stagesDone(done, total)}
       </span>
     </div>
   )
@@ -222,19 +226,30 @@ export function TextField({ label, hint, extra, value, onChange, className, ...i
   )
 }
 
-/** An amount of money, typed like "1,250" or "1250.50". The form reads it with parseMoney. */
-export function MoneyField({ label, hint, extra, value, onChange, ...input }: Omit<TextFieldProps, 'type' | 'inputMode'>) {
+/** An amount of money, typed the way the app's language writes numbers. The form reads it with parseMoney from format.ts. */
+export function MoneyField({
+  label,
+  hint,
+  extra,
+  value,
+  onChange,
+  currency,
+  ...input
+}: Omit<TextFieldProps, 'type' | 'inputMode'> & { currency: Currency }) {
+  const sign = currencySign(currency)
   return (
     <Field label={label} hint={hint} extra={extra}>
       {(id, describedBy) => (
         <span className="money-input">
           <span className="money-input__sign" aria-hidden="true">
-            $
+            {sign}
           </span>
           <input
             id={id}
             aria-describedby={describedBy}
             className="input"
+            // Room for the sign: "$" or "MDL".
+            style={{ paddingLeft: `calc(${sign.length}ch + 20px)` }}
             inputMode="decimal"
             autoComplete="off"
             placeholder="0"

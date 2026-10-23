@@ -1,4 +1,4 @@
-import { plural } from './format'
+import { getT } from './i18n'
 import type { ProjectSummary } from './types'
 
 export interface ProjectTodo {
@@ -11,30 +11,30 @@ export interface ProjectTodo {
 
 /** What needs doing on a project, from the point of view of `role`. */
 export function projectTodos(project: ProjectSummary, role: 'client' | 'builder'): ProjectTodo[] {
+  const t = getT().todos
   const todos: ProjectTodo[] = []
-  const clientName = project.client?.name ?? project.invitedClient?.name ?? 'the client'
+  const clientName = project.client?.name ?? project.invitedClient?.name ?? t.theClient
   if (project.status === 'proposed') {
     todos.push(
       role === 'client'
-        ? { text: 'Proposal to review', urgent: true }
-        : { text: `Waiting for ${clientName} to accept`, urgent: false },
+        ? { text: t.proposalToReview, urgent: true }
+        : { text: t.waitingForAccept(clientName), urgent: false },
     )
   }
   if (project.pendingChanges > 0) {
-    const text = plural(project.pendingChanges, 'change order')
     todos.push(
       role === 'client'
-        ? { text: `${text} to approve`, urgent: true, tab: 'money' }
-        : { text: `${text} waiting`, urgent: false, tab: 'money' },
+        ? { text: t.changesToApprove(project.pendingChanges), urgent: true, tab: 'money' }
+        : { text: t.changesWaiting(project.pendingChanges), urgent: false, tab: 'money' },
     )
   }
   if (project.overdueInvoices > 0) {
-    todos.push({ text: `${plural(project.overdueInvoices, 'invoice')} overdue`, urgent: true, tab: 'money' })
+    todos.push({ text: t.invoicesOverdue(project.overdueInvoices), urgent: true, tab: 'money' })
   }
   const dueNotOverdue = project.dueInvoices - project.overdueInvoices
   if (dueNotOverdue > 0) {
     todos.push({
-      text: role === 'client' ? `${plural(dueNotOverdue, 'invoice')} to pay` : `${plural(dueNotOverdue, 'invoice')} due`,
+      text: role === 'client' ? t.invoicesToPay(dueNotOverdue) : t.invoicesDue(dueNotOverdue),
       urgent: role === 'client',
       tab: 'money',
     })

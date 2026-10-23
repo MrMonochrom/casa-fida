@@ -100,6 +100,7 @@ describe('a proposal, for the builder', () => {
       description: 'A 400 sq ft extension.',
       address: '1420 Elm Street',
       startDate: '2026-08-21',
+      currency: 'USD',
       contractAmount: 9_550_000,
     })
   })

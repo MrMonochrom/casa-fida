@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { moneyInputValue, parseMoney } from '../../shared/money'
-import { DESCRIPTION_MAX, JOB_TIMINGS, PLACE_MAX, TITLE_MAX, TRADES, TRADE_KEYS } from '../../shared/rules'
+import { moneyInputValue, parseMoney } from '../format'
+import { DESCRIPTION_MAX, PLACE_MAX, TITLE_MAX, TRADE_KEYS } from '../../shared/rules'
 import type { JobTiming, Trade } from '../../shared/rules'
 import { api } from '../api'
+import { CurrencyField } from '../components/CurrencyField'
 import { BackLink, FormError, Loading, MoneyField, PageHeader, SelectField, TextAreaField, TextField } from '../components/ui'
+import { useT } from '../i18n'
+import { preferredCurrency, rememberCurrency } from '../preferredCurrency'
 import { navigate } from '../router'
 import type { Job } from '../types'
 import { useResource } from '../useResource'
@@ -27,6 +30,7 @@ function optionalAmount(value: string): number | null | undefined {
 }
 
 function JobFormFields({ job }: { job: Job | null }) {
+  const t = useT()
   const [title, setTitle] = useState(job?.title ?? '')
   const [trade, setTrade] = useState<Trade | ''>(job?.trade ?? '')
   const [location, setLocation] = useState(job?.location ?? '')
@@ -34,14 +38,17 @@ function JobFormFields({ job }: { job: Job | null }) {
   const [budgetMin, setBudgetMin] = useState(job?.budgetMin ? moneyInputValue(job.budgetMin) : '')
   const [budgetMax, setBudgetMax] = useState(job?.budgetMax ? moneyInputValue(job.budgetMax) : '')
   const [timing, setTiming] = useState<JobTiming>(job?.timing ?? 'flexible')
+  const [currency, setCurrency] = useState(job?.currency ?? preferredCurrency)
+  // Quotes are in the job's currency, so it stays once any have come in.
+  const currencyLocked = !!job && job.quoteCount > 0
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (job && job.status !== 'open') {
     return (
       <>
-        <BackLink to={`/jobs/${job.id}`}>Back to the job</BackLink>
-        <p className="notice">Only jobs that are still taking quotes can be changed.</p>
+        <BackLink to={`/jobs/${job.id}`}>{t.jobs.backToJob}</BackLink>
+        <p className="notice">{t.jobs.onlyOpenChange}</p>
       </>
     )
   }
@@ -51,14 +58,15 @@ function JobFormFields({ job }: { job: Job | null }) {
     const min = optionalAmount(budgetMin)
     const max = optionalAmount(budgetMax)
     if (min === undefined || max === undefined) {
-      setError('The budget should be an amount like 15,000, or left empty.')
+      setError(t.jobs.budgetInvalid)
       return
     }
     setBusy(true)
     setError(null)
     try {
-      const input = { title, trade, location, description, budgetMin: min, budgetMax: max, timing }
+      const input = { title, trade, location, description, currency, budgetMin: min, budgetMax: max, timing }
       const saved = job ? await api.saveJob(job.id, input) : await api.postJob(input)
+      rememberCurrency(currency)
       navigate(`/jobs/${saved.id}`, { replace: !!job })
     } catch (err) {
       setError((err as Error).message)
@@ -68,60 +76,74 @@ function JobFormFields({ job }: { job: Job | null }) {
 
   return (
     <>
-      <BackLink to={job ? `/jobs/${job.id}` : '/jobs'}>{job ? 'Back to the job' : 'My jobs'}</BackLink>
+      <BackLink to={job ? `/jobs/${job.id}` : '/jobs'}>{job ? t.jobs.backToJob : t.nav.myJobs}</BackLink>
       <PageHeader
-        title={job ? 'Change your job' : 'Post a job'}
-        subtitle={
-          job
-            ? 'Builders who already quoted will see the changes.'
-            : 'Builders who offer this kind of work will see it and can send you a quote.'
-        }
+        title={job ? t.jobs.changeTitle : t.common.postJob}
+        subtitle={job ? t.jobs.changeSubtitle : t.jobs.postSubtitle}
       />
       <form className="card form form--narrow" onSubmit={handleSubmit} noValidate>
         <TextField
-          label="Title"
+          label={t.common.title}
           value={title}
           onChange={setTitle}
           maxLength={TITLE_MAX}
-          placeholder="Main bathroom remodel"
+          placeholder={t.jobs.titlePlaceholder}
           required
         />
         <div className="form-row">
-          <SelectField label="Kind of work" value={trade} onChange={(v) => setTrade(v as Trade)} required>
+          <SelectField label={t.jobs.kindOfWork} value={trade} onChange={(v) => setTrade(v as Trade)} required>
             <option value="" disabled>
-              Choose…
+              {t.jobs.choose}
             </option>
             {TRADE_KEYS.map((key) => (
               <option key={key} value={key}>
-                {TRADES[key]}
+                {t.trades[key]}
               </option>
             ))}
           </SelectField>
           <TextField
-            label="Where"
+            label={t.jobs.where}
             value={location}
             onChange={setLocation}
             maxLength={PLACE_MAX}
-            placeholder="Denver, CO"
-            hint="A town or neighborhood is enough."
+            placeholder={t.common.placePlaceholder}
+            hint={t.jobs.whereHint}
             required
           />
         </div>
         <TextAreaField
-          label="Describe the work"
+          label={t.jobs.describe}
           value={description}
           onChange={setDescription}
           maxLength={DESCRIPTION_MAX}
           rows={6}
-          placeholder="What you'd like done, rough sizes, materials you have in mind, anything builders should know."
+          placeholder={t.jobs.describePlaceholder}
           required
         />
+        <CurrencyField
+          value={currency}
+          onChange={setCurrency}
+          disabled={currencyLocked}
+          hint={currencyLocked ? t.jobs.currencyLocked : undefined}
+        />
         <div className="form-row">
-          <MoneyField label="Budget from" extra="(optional)" value={budgetMin} onChange={setBudgetMin} />
-          <MoneyField label="Budget up to" extra="(optional)" value={budgetMax} onChange={setBudgetMax} />
+          <MoneyField
+            label={t.jobs.budgetFrom}
+            extra={t.common.optional}
+            value={budgetMin}
+            onChange={setBudgetMin}
+            currency={currency}
+          />
+          <MoneyField
+            label={t.jobs.budgetUpTo}
+            extra={t.common.optional}
+            value={budgetMax}
+            onChange={setBudgetMax}
+            currency={currency}
+          />
         </div>
-        <SelectField label="When would you like to start?" value={timing} onChange={(v) => setTiming(v as JobTiming)}>
-          {Object.entries(JOB_TIMINGS).map(([key, label]) => (
+        <SelectField label={t.jobs.whenStart} value={timing} onChange={(v) => setTiming(v as JobTiming)}>
+          {Object.entries(t.timings).map(([key, label]) => (
             <option key={key} value={key}>
               {label}
             </option>
@@ -130,10 +152,10 @@ function JobFormFields({ job }: { job: Job | null }) {
         <FormError error={error} />
         <div className="form-actions">
           <button type="button" className="button button--secondary" onClick={() => window.history.back()}>
-            Cancel
+            {t.common.cancel}
           </button>
           <button type="submit" className="button button--primary" disabled={busy}>
-            {busy ? 'Saving…' : job ? 'Save changes' : 'Post job'}
+            {busy ? t.common.saving : job ? t.common.saveChanges : t.jobs.postJob}
           </button>
         </div>
       </form>
