@@ -19,7 +19,6 @@ import { languageOf, messagesIn } from '../i18n/index.ts'
 import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
 import { appUrl, sendEmail } from '../mailer.ts'
-import { confirmEmail } from '../verification.ts'
 import { loadProject, moneyOf, projectAs, projectFor, projectSelect } from '../projects.ts'
 import type { ProjectRow, ProjectStatus, Side } from '../projects.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
@@ -410,10 +409,8 @@ projectRoutes.delete('/projects/:id', requireRole('builder'), async (req, res) =
 // The link in the first email stops working.
 projectRoutes.post('/projects/:id/invite-link', requireRole('builder'), async (req, res) => {
   const project = await projectAs(res, req.params.id, 'builder', ['proposed'])
-  if (project.client_id) {
-    const name = project.client_user_name ?? project.client_name
-    return fail(res, 409, (m) => m.projects.alreadyClaimed(name))
-  }
+  // The name the builder typed, not the account's own: they don't see that until the client accepts.
+  if (project.client_id) return fail(res, 409, (m) => m.projects.alreadyClaimed(project.client_name))
   res.json({ link: await newInviteLink(project.id) })
 })
 
@@ -504,8 +501,9 @@ projectRoutes.post('/invites/preview', async (req, res) => {
   })
 })
 
-// Adds the proposal from an invite link to the logged-in client's account. The link was emailed to
-// the address the builder typed, so if that's this account's address, it's now confirmed too.
+// Adds the proposal from an invite link to the logged-in client's account. Opening it doesn't confirm
+// the account's email address, even when it's the one the builder typed: the builder can get a
+// fresh invite link too, so having one doesn't show that you can read that email.
 projectRoutes.post('/invites/claim', requireUser, async (req, res) => {
   const user = me(res)
   const project = await projectForToken(req.body?.token)
@@ -518,7 +516,6 @@ projectRoutes.post('/invites/claim', requireUser, async (req, res) => {
     [user.id, project.id, user.id],
   )
   if (result.affectedRows === 0) throw notFound(INVITE_GONE)
-  if (user.email === project.client_email) await confirmEmail(user)
   if (project.client_id === null) publish(project.builder_id, { type: 'project', projectId: project.id })
   res.json({ projectId: project.id })
 })

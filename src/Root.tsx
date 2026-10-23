@@ -34,11 +34,7 @@ export function Root() {
     setUser(null)
   }, [])
 
-  const showClaimed = useCallback((projectId: number) => {
-    navigate(`/projects/${projectId}`, { replace: true })
-    // Opening an invite sent to your own address confirms it.
-    api.me().then((fresh) => fresh && setUser(fresh), () => {})
-  }, [])
+  const showClaimed = useCallback((projectId: number) => navigate(`/projects/${projectId}`, { replace: true }), [])
 
   if (user === undefined) {
     return (

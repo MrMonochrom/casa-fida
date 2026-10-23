@@ -14,7 +14,7 @@ CREATE TABLE users (
   name VARCHAR(100) NOT NULL,
   role ENUM('client', 'builder') NOT NULL,
   phone VARCHAR(40) NULL,
-  -- Set once the person opens the link in the confirmation email (or an invite sent to this address).
+  -- Set once the person opens the link in the confirmation email.
   email_verified_at TIMESTAMP NULL,
   -- SHA-256 of the token in the newest confirmation link, while it can still be used.
   verify_token_hash CHAR(64) NULL UNIQUE,

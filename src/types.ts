@@ -22,7 +22,7 @@ export interface User {
   name: string
   role: Role
   phone: string | null
-  /** Whether they've opened the link in the confirmation email (or an invite sent to their address). */
+  /** Whether they've opened the link in the confirmation email. */
   emailVerified: boolean
   memberSince: number
   /** Builders only, once they've set up their business profile. */
