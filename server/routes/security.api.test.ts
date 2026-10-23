@@ -115,13 +115,31 @@ describe('proposals and confirmed addresses', () => {
     expect((await ana.agent.post('/api/invites/claim').send({ token: invite })).body).toEqual({ projectId: project.id })
   })
 
-  it('counts opening an invite sent to your own address as confirming it', async () => {
+  it("doesn't count opening an invite as confirming the address", async () => {
     const ana = await signUpUnconfirmed('ana@example.com')
     const bob = await createBuilder()
     const project = await propose(bob, 'ana@example.com')
     const res = await ana.agent.post('/api/invites/claim').send({ token: tokenIn('invite') })
     expect(res.body).toEqual({ projectId: project.id })
-    expect((await ana.agent.get('/api/me')).body.user.emailVerified).toBe(true)
+    expect((await ana.agent.get('/api/me')).body.user.emailVerified).toBe(false)
+  })
+
+  it("doesn't let a builder confirm someone else's address with an invite link they asked for", async () => {
+    // Bob sent Ana a proposal. Mallory has a builder account, and signs up as a client with Ana's address.
+    const bob = await createBuilder()
+    const waiting = await propose(bob, 'ana@example.com')
+    const mallory = await createBuilder()
+    const bait = await propose(mallory, 'ana@example.com')
+    const link = (await mallory.agent.post(`/api/projects/${bait.id}/invite-link`)).body.link
+    const token = new URL(link).searchParams.get('token')
+    const fake = await signUpUnconfirmed('ana@example.com')
+
+    expect((await fake.agent.post('/api/invites/claim').send({ token })).body).toEqual({ projectId: bait.id })
+    expect((await fake.agent.get('/api/me')).body.user.emailVerified).toBe(false)
+    // So Bob's proposal stays out of the account.
+    const mine = (await fake.agent.get('/api/projects')).body.projects
+    expect(mine.map((p: { id: number }) => p.id)).toEqual([bait.id])
+    expect((await fake.agent.get(`/api/projects/${waiting.id}`)).status).toBe(404)
   })
 
   it("doesn't confirm a different address from someone else's invite", async () => {
@@ -149,6 +167,15 @@ describe("a client's own details", () => {
     await ana.agent.post(`/api/projects/${project.id}/accept`)
     const accepted = (await bob.agent.get(`/api/projects/${project.id}`)).body.project
     expect(accepted.client).toEqual({ id: ana.user.id, name: 'Ana Lima', email: 'ana@example.com', phone: '+373 69 123 456' })
+  })
+
+  it("stay out of the answer when the builder asks for an invite link for a proposal that's in the account", async () => {
+    await createClient({ name: 'Ana Lima', email: 'ana@example.com' })
+    const bob = await createBuilder()
+    const project = await propose(bob, 'ana@example.com', { clientName: 'Whoever' })
+    const res = await bob.agent.post(`/api/projects/${project.id}/invite-link`)
+    expect(res.status).toBe(409)
+    expect(res.body.error).toBe('Whoever already has this proposal in their account.')
   })
 
   it('stay hidden after the client declines', async () => {

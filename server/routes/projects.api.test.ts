@@ -232,7 +232,8 @@ describe('invite links', () => {
     const project = await propose(bob, ana.email)
     const res = await bob.agent.post(`/api/projects/${project.id}/invite-link`)
     expect(res.status).toBe(409)
-    expect(res.body.error).toBe('Ana already has this proposal in their account.')
+    // By the name the builder typed: the client's own isn't theirs to see yet.
+    expect(res.body.error).toBe('Cleo Client already has this proposal in their account.')
   })
 })
 
