@@ -118,7 +118,7 @@ export function ProjectPage({ id }: { id: number | null }) {
           </p>
         </div>
         <div className="page-header__actions">
-          {other && <MessageButton userId={other.id} />}
+          {other && (!isBuilder || started) && <MessageButton userId={other.id} />}
           {isBuilder && (p.status === 'proposed' || p.status === 'active') && (
             <button type="button" className="button button--secondary" onClick={() => setEditing(true)}>
               {t.project.editDetails}

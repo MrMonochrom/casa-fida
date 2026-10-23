@@ -1,8 +1,10 @@
 import express from 'express'
 import type { RowDataPacket } from 'mysql2/promise'
+import { hashToken } from '../auth.ts'
 import { db } from '../db.ts'
-import { subscribe } from '../events.ts'
-import { me, requireUser } from '../session.ts'
+import { MAX_STREAMS_PER_USER, streamCount, subscribe } from '../events.ts'
+import { currentUser, me, requireUser, sessionToken } from '../session.ts'
+import { fail } from '../validate.ts'
 
 export const liveRoutes = express.Router()
 
@@ -11,7 +13,11 @@ const HEARTBEAT_MS = 25_000
 
 // Live updates while the app is open (server-sent events): new messages, read messages, and changes
 // to projects and jobs, as they happen. The browser reconnects by itself if the connection drops.
+// They end with the login: on logging out or a password change straight away, and when the session
+// expires at the next heartbeat.
 liveRoutes.get('/events', requireUser, (req, res) => {
+  const userId = me(res).id
+  if (streamCount(userId) >= MAX_STREAMS_PER_USER) return fail(res, 429, (m) => m.general.tooManyConnections)
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -20,10 +26,19 @@ liveRoutes.get('/events', requireUser, (req, res) => {
     'X-Accel-Buffering': 'no',
   })
   res.write('retry: 5000\n\n')
-  const unsubscribe = subscribe(me(res).id, (event) => {
-    res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
-  })
-  const heartbeat = setInterval(() => res.write(': still here\n\n'), HEARTBEAT_MS)
+  const unsubscribe = subscribe(
+    userId,
+    (event) => {
+      res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+    },
+    { session: hashToken(sessionToken(req) ?? ''), close: () => res.end() },
+  )
+  const heartbeat = setInterval(async () => {
+    const user = await currentUser(req).catch(() => undefined)
+    // undefined: the database didn't answer. Keep going; the next heartbeat checks again.
+    if (user === null || (user && user.id !== userId)) res.end()
+    else res.write(': still here\n\n')
+  }, HEARTBEAT_MS)
   req.on('close', () => {
     clearInterval(heartbeat)
     unsubscribe()

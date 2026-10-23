@@ -7,11 +7,12 @@ import { navigate, usePath, useSearchParams } from './router'
 import { AuthScreen } from './screens/AuthScreen'
 import { BuilderSetup } from './screens/BuilderSetup'
 import { InviteScreen } from './screens/InviteScreen'
+import { VerifyEmailScreen } from './screens/VerifyEmailScreen'
 import type { User } from './types'
 
 /**
- * Shows the right screen: the invite page from a proposal email, log in / sign up, a new builder's
- * business profile, or the app.
+ * Shows the right screen: the invite page from a proposal email, the page that confirms an email
+ * address, log in / sign up, a new builder's business profile, or the app.
  */
 export function Root() {
   // Watching the language here means switching it re-renders everything below.
@@ -33,13 +34,28 @@ export function Root() {
     setUser(null)
   }, [])
 
-  const showClaimed = useCallback((projectId: number) => navigate(`/projects/${projectId}`, { replace: true }), [])
+  const showClaimed = useCallback((projectId: number) => {
+    navigate(`/projects/${projectId}`, { replace: true })
+    // Opening an invite sent to your own address confirms it.
+    api.me().then((fresh) => fresh && setUser(fresh), () => {})
+  }, [])
 
   if (user === undefined) {
     return (
       <div className="splash" aria-label={t.nav.loading}>
         <Logo />
       </div>
+    )
+  }
+
+  if (path === '/verify-email') {
+    return (
+      <VerifyEmailScreen
+        token={params.get('token') ?? ''}
+        user={user}
+        onUserChange={setUser}
+        onLeave={() => navigate('/', { replace: true })}
+      />
     )
   }
 

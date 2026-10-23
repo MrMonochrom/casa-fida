@@ -41,6 +41,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
     name: 'Emma Clarke',
     role: 'client',
     phone: null,
+    emailVerified: true,
     memberSince: MAY_1,
     builderProfile: null,
     ...overrides,

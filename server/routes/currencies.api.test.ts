@@ -72,7 +72,7 @@ describe('currencies', () => {
     await ana.agent.post(`/api/projects/${project.id}/accept`)
     const locked = await bob.agent.put(`/api/projects/${project.id}`).send({ ...details, currency: 'USD' })
     expect(locked.status).toBe(409)
-    expect(locked.body.error).toBe('The price is agreed. Send a change order to change it.')
+    expect(locked.body.error).toBe("The currency can't change once the proposal is accepted.")
   })
 
   it('takes the large amounts rubles need, up to 100 million', async () => {

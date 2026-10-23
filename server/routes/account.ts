@@ -4,11 +4,14 @@ import { NAME_MAX, ROLES } from '../../shared/rules.ts'
 import type { Role } from '../../shared/rules.ts'
 import { db } from '../db.ts'
 import { hashPassword, hashToken, verifyPassword } from '../auth.ts'
+import { closeStreams } from '../events.ts'
+import { languageOf } from '../i18n/index.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { currentUser, endSession, me, requireUser, sessionToken, startSession } from '../session.ts'
 import { loadUser, ownAccount } from '../users.ts'
 import type { UserRow } from '../users.ts'
 import { badRequest, fail, invalid, isEmail, passwordProblem, text } from '../validate.ts'
+import { confirmEmail, sendVerificationEmail, userForVerifyToken } from '../verification.ts'
 
 export const accountRoutes = express.Router()
 
@@ -28,7 +31,8 @@ function readSignup(body: Record<string, unknown>) {
   return { name, email, role, password: body.password as string }
 }
 
-// Creates an account and logs in. Builders set up their business profile next.
+// Creates an account and logs in, and emails a link to confirm the address. Builders set up their
+// business profile next.
 accountRoutes.post('/signup', async (req, res) => {
   const ip = req.ip ?? ''
   const wait = limits.signupsPerIp.retryAfter(ip)
@@ -53,6 +57,9 @@ accountRoutes.post('/signup', async (req, res) => {
   }
   limits.signupsPerIp.hit(ip)
 
+  await sendVerificationEmail({ id: userId, email: input.email }, languageOf(req)).catch((err) =>
+    console.error('Confirmation email failed:', err),
+  )
   await startSession(res, userId)
   res.status(201).json({ user: await ownAccount((await loadUser(userId))!) })
 })
@@ -62,18 +69,24 @@ accountRoutes.post('/login', async (req, res) => {
   const email = text(req.body?.email).toLowerCase()
   const password = typeof req.body?.password === 'string' ? req.body.password : ''
 
-  const wait = Math.max(limits.loginsPerIp.retryAfter(ip), limits.failedLoginsPerEmail.retryAfter(email))
+  const emailAndIp = `${email} ${ip}`
+  const wait = Math.max(
+    limits.loginsPerIp.retryAfter(ip),
+    limits.failedLoginsPerEmailAndIp.retryAfter(emailAndIp),
+    limits.failedLoginsPerEmail.retryAfter(email),
+  )
   if (wait) return tooManyAttempts(res, wait)
   limits.loginsPerIp.hit(ip)
 
   const [rows] = await db.execute<UserRow[]>('SELECT * FROM users WHERE email = ?', [email])
   const user = rows[0]
   if (!(await verifyPassword(password, user?.password_hash))) {
+    limits.failedLoginsPerEmailAndIp.hit(emailAndIp)
     limits.failedLoginsPerEmail.hit(email)
     fail(res, 401, (m) => m.account.wrongLogin)
     return
   }
-  limits.failedLoginsPerEmail.reset(email)
+  limits.failedLoginsPerEmailAndIp.reset(emailAndIp)
 
   await startSession(res, user.id)
   res.json({ user: await ownAccount(user) })
@@ -114,9 +127,30 @@ accountRoutes.put('/me/password', requireUser, async (req, res) => {
     user.id,
   ])
   // Log out every other browser, in case someone else knew the old password.
-  await db.execute('DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?', [
-    user.id,
-    hashToken(sessionToken(req) ?? ''),
-  ])
+  const thisSession = hashToken(sessionToken(req) ?? '')
+  await db.execute('DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?', [user.id, thisSession])
+  closeStreams(user.id, { except: thisSession })
+  res.status(204).end()
+})
+
+// Confirms an email address from the link in the confirmation email. Works without logging in:
+// the link is the proof.
+accountRoutes.post('/verify-email', async (req, res) => {
+  const user = await userForVerifyToken(text(req.body?.token))
+  if (!user) return fail(res, 404, (m) => m.account.verifyLinkGone)
+  await db.execute('UPDATE users SET verify_token_hash = NULL, verify_expires_at = NULL WHERE id = ?', [user.id])
+  await confirmEmail(user)
+  res.json({ email: user.email })
+})
+
+// Sends the confirmation email again, with a new link.
+accountRoutes.post('/me/verify-email', requireUser, async (req, res) => {
+  const user = me(res)
+  if (user.email_verified_at) return fail(res, 409, (m) => m.account.alreadyConfirmed)
+  const key = String(user.id)
+  const wait = limits.verificationEmailsPerUser.retryAfter(key)
+  if (wait) return tooManyAttempts(res, wait)
+  limits.verificationEmailsPerUser.hit(key)
+  await sendVerificationEmail(user, languageOf(req))
   res.status(204).end()
 })

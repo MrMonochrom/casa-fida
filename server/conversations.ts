@@ -23,11 +23,13 @@ export async function conversationBetween(clientId: number, builderId: number): 
 /**
  * Whether a builder may start a conversation with a client: only once they have quoted on one of
  * the client's jobs or have a project together, so builders can't message clients out of the blue.
+ * A proposal the client hasn't accepted doesn't count, or sending one would be a way in.
  */
 export async function builderKnowsClient(builderId: number, clientId: number): Promise<boolean> {
   const [rows] = await db.execute<RowDataPacket[]>(
     `SELECT EXISTS (SELECT 1 FROM quotes q JOIN jobs j ON j.id = q.job_id WHERE q.builder_id = ? AND j.client_id = ?)
-         OR EXISTS (SELECT 1 FROM projects p WHERE p.builder_id = ? AND p.client_id = ?) AS knows`,
+         OR EXISTS (SELECT 1 FROM projects p
+                    WHERE p.builder_id = ? AND p.client_id = ? AND p.status IN ('active', 'completed')) AS knows`,
     [builderId, clientId, builderId, clientId],
   )
   return Boolean(rows[0].knows)

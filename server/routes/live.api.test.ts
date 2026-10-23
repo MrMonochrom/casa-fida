@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net'
 import request from 'supertest'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { app } from '../app.ts'
-import { isOnline, publish } from '../events.ts'
+import { MAX_STREAMS_PER_USER, isOnline, publish, subscribe } from '../events.ts'
 import {
   PASSWORD,
   activeProject,
@@ -77,8 +77,10 @@ describe('GET /api/events', () => {
 
   /** Opens the event stream and collects what arrives. */
   async function openStream(cookie: string) {
-    server = app.listen(0, '127.0.0.1')
-    await new Promise((resolve) => server!.once('listening', resolve))
+    if (!server) {
+      server = app.listen(0, '127.0.0.1')
+      await new Promise((resolve) => server!.once('listening', resolve))
+    }
     const { port } = server.address() as AddressInfo
     let received = ''
     const waiters: (() => void)[] = []
@@ -88,6 +90,8 @@ describe('GET /api/events', () => {
       req.end()
     })
     response.setEncoding('utf8')
+    /** Resolves when the server ends the stream. */
+    const ended = new Promise<void>((resolve) => response.on('end', resolve))
     response.on('data', (chunk: string) => {
       received += chunk
       for (const wake of waiters.splice(0)) wake()
@@ -97,7 +101,7 @@ describe('GET /api/events', () => {
       while (!received.includes(text)) await new Promise<void>((resolve) => waiters.push(resolve))
       return received
     }
-    return { response, waitFor, close: () => response.destroy() }
+    return { response, waitFor, ended, close: () => response.destroy() }
   }
 
   it('streams events for the logged-in person until they disconnect', async () => {
@@ -119,5 +123,39 @@ describe('GET /api/events', () => {
 
   it('needs you to be logged in', async () => {
     expect((await newAgent().get('/api/events')).status).toBe(401)
+  })
+
+  it('ends when that login logs out, and keeps the person’s other logins going', async () => {
+    const ana = await createClient()
+    const phone = await cookieOf(ana)
+    const laptop = await cookieOf(ana)
+    const onPhone = await openStream(phone)
+    const onLaptop = await openStream(laptop)
+    await onPhone.waitFor('retry')
+    await onLaptop.waitFor('retry')
+
+    await request(app).post('/api/logout').set('Cookie', phone)
+    await onPhone.ended
+    publish(ana.user.id, { type: 'project', projectId: 3 })
+    expect(await onLaptop.waitFor('projectId')).toContain('"projectId":3')
+    onLaptop.close()
+  })
+
+  it('ends on other logins when the password changes', async () => {
+    const ana = await createClient()
+    const elsewhere = await openStream(await cookieOf(ana))
+    await elsewhere.waitFor('retry')
+    const res = await ana.agent.put('/api/me/password').send({ currentPassword: PASSWORD, newPassword: 'a-new-password' })
+    expect(res.status).toBe(204)
+    await elsewhere.ended
+  })
+
+  it('limits how many one person can have open', async () => {
+    const ana = await createClient()
+    const open = Array.from({ length: MAX_STREAMS_PER_USER }, () => subscribe(ana.user.id, () => {}))
+    const res = await ana.agent.get('/api/events')
+    expect(res.status).toBe(429)
+    expect(res.body.error).toBe('Too many open windows. Close some and reload this one.')
+    for (const unsubscribe of open) unsubscribe()
   })
 })

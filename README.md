@@ -18,7 +18,14 @@ Open http://localhost:5174 and log in with a [test account](#test-accounts), or 
 
 MySQL doesn't start by itself after a reboot, so run `npm run db:start` before `npm run dev`.
 
-If your database was made before currencies were added, bring it up to date once with `npm run db:shell < db/migrations/001-currencies.sql` (existing jobs and projects stay in US dollars).
+If your database was made before currencies or email confirmation were added, bring it up to date by running each file in [db/migrations](db/migrations) you haven't run yet, in order, once:
+
+```sh
+npm run db:shell < db/migrations/001-currencies.sql           # existing jobs and projects stay in US dollars
+npm run db:shell < db/migrations/002-email-verification.sql   # existing accounts count as confirmed
+```
+
+Without `SMTP_URL`, emails (like the link that confirms a new account's email address) are printed in the terminal running `npm run dev`.
 
 ## Test accounts
 
@@ -44,7 +51,7 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 - **Find a builder:** search by name or area and filter by trade. Profiles show reviews, years in business, license and insurance, and finished projects. Message any builder from their profile.
 - **Post a job:** what you need, the kind of work, where, a budget range and when to start. Builders in that trade see it and send quotes.
 - **Compare quotes and hire:** each quote shows the price, how long it takes, what's included and the builder's rating. Accepting one starts the project, declines the others and closes the job.
-- **Accept a proposal:** a builder you've already talked to can send you the work and price directly. If you don't have an account yet, the email has a link to sign up and see it.
+- **Accept a proposal:** a builder you've already talked to can send you the work and price directly. It goes straight into your account once you've confirmed your email address; otherwise the email has a link to sign up (or log in) and see it. Until you accept, the builder sees only the name and email they typed, not your own details or phone number.
 - **Follow the project:** progress through its stages, photo updates, change orders to approve or decline before they count, and every invoice with what's been paid.
 - **Review the builder** once the project is completed. Reviews appear on their profile with your first name and last initial.
 
@@ -63,6 +70,7 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 - Works on phones and desktops, in light or dark mode.
 - **Prices in US dollars, euros, Moldovan lei, Romanian lei or Russian rubles.** A client picks the currency when posting a job, and a builder when sending a proposal. Quotes, the project, change orders and invoices then use it. The currency can't change once builders have quoted or the client has accepted.
 - **In English, Romanian or Russian.** The app starts in the browser's language and can be switched from the menu at the top of every page. Error messages and proposal emails come from the server in the same language.
+- **Confirmed email addresses.** Signing up emails a link to confirm the address; a banner asks until it's done. Builders need it to send proposals, and proposals only go straight into accounts that have it.
 
 ## Scripts
 
@@ -122,7 +130,7 @@ Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx
 ## Tests
 
 ```sh
-npm test                 # all 438 tests
+npm test                 # all 480 tests
 npx vitest run --project web
 npx vitest run server/routes/billing.api.test.ts
 ```
@@ -144,7 +152,7 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 | `NODE_ENV` | `production` serves the built app and turns on security headers | development |
 | `APP_URL` | The address in links in emails | `http://localhost:5174` |
 | `PORT`, `HOST` | Where the server listens | `3002`, `127.0.0.1` |
-| `TRUST_PROXY` | How many proxies sit in front, so login limits see real addresses | off |
+| `TRUST_PROXY` | How many proxies sit in front, so login limits see real addresses (`true` counts as 1) | off |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | The MySQL database | `127.0.0.1`, `3307`, `root`, empty, `casa_fida` |
 | `SMTP_URL`, `MAIL_FROM` | Sending email. Without `SMTP_URL`, emails are only printed in the server's log. | not set |
 
@@ -153,8 +161,8 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 | Not done yet | Today |
 |---|---|
 | Paying in the app | Clients pay the way they agree with their builder, who marks each invoice paid. |
-| Email notifications | Only proposal invites are emailed. Everything else shows in the app and its menu counts. |
-| Password reset and email verification | Not built. |
+| Email notifications | Only proposal invites and email confirmation links are emailed. Everything else shows in the app and its menu counts. |
+| Password reset | Not built. |
 | Files such as plans and contracts | Only photos, on project updates. |
 | Running several server processes | Live updates and login limits are kept in one process's memory. |
 | Photo storage | Photos are stored in MySQL. A hosted app would keep them in file storage instead. |

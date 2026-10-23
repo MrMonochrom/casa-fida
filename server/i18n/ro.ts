@@ -33,6 +33,7 @@ export const ro: ServerMessages = {
     serverError: 'Ceva nu a funcționat la noi. Vă rugăm să încercați din nou.',
     tooManyAttempts: (minutes: number) =>
       `Prea multe încercări. Încercați din nou peste ${minutes} ${pluralRo(minutes, 'minut', 'minute', 'de minute')}.`,
+    tooManyConnections: 'Prea multe ferestre deschise. Închideți câteva și reîncărcați-o pe aceasta.',
     clientsOnly: 'Doar clienții pot face asta.',
     buildersOnly: 'Doar constructorii pot face asta.',
     descriptionTooLong: `Descrierea trebuie să aibă mai puțin de ${chars(DESCRIPTION_MAX)}.`,
@@ -48,6 +49,8 @@ export const ro: ServerMessages = {
     wrongPassword: 'Parola actuală este greșită.',
     passwordTooShort: `Parola trebuie să aibă cel puțin ${chars(PASSWORD_MIN)}.`,
     passwordTooLong: 'Parola este prea lungă.',
+    verifyLinkGone: 'Acest link de confirmare a expirat sau a fost deja folosit. Conectați-vă pentru a primi unul nou.',
+    alreadyConfirmed: 'Adresa dvs. de email este deja confirmată.',
   },
   builders: {
     enterBusinessName: 'Vă rugăm să introduceți numele firmei.',
@@ -109,6 +112,7 @@ export const ro: ServerMessages = {
     notYourEmail: 'Folosiți adresa de email a clientului, nu pe a dvs.',
     builderEmail: 'Acest email aparține unui cont de constructor. Propunerile pot fi trimise doar clienților.',
     needProfile: 'Completați profilul firmei înainte de a trimite propuneri.',
+    confirmEmailFirst: 'Confirmați-vă adresa de email înainte de a trimite propuneri. V-am trimis un link.',
     priceAgreed: 'Prețul este convenit. Trimiteți o modificare pentru a-l schimba.',
     currencyLocked: 'Moneda nu se mai poate schimba după ce propunerea a fost acceptată.',
     alreadyClaimed: (name: string) => `${name} are deja această propunere în cont.`,
@@ -169,6 +173,11 @@ export const ro: ServerMessages = {
     notYet: 'Puteți scrie unui client după ce i-ați trimis o ofertă sau dacă aveți un proiect împreună.',
     enterText: 'Scrieți mai întâi un mesaj.',
     tooLong: `Mesajele pot avea cel mult ${chars(MESSAGE_MAX)}.`,
+  },
+  verifyEmail: {
+    subject: 'Confirmați-vă adresa de email pentru Casa Fida',
+    intro: 'Deschideți acest link pentru a vă confirma adresa de email pentru Casa Fida:',
+    ignore: 'Dacă nu v-ați înregistrat pe Casa Fida, puteți ignora acest email.',
   },
   proposalEmail: {
     subject: (business: string) => `${business} v-a trimis o propunere de proiect`,

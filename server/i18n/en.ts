@@ -29,6 +29,7 @@ export const en = {
     serverError: 'Something went wrong on our side. Please try again.',
     tooManyAttempts: (minutes: number) =>
       `Too many attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+    tooManyConnections: 'Too many open windows. Close some and reload this one.',
     clientsOnly: 'Only clients can do that.',
     buildersOnly: 'Only builders can do that.',
     descriptionTooLong: `Keep the description under ${n(DESCRIPTION_MAX)} characters.`,
@@ -44,6 +45,8 @@ export const en = {
     wrongPassword: 'Your current password is wrong.',
     passwordTooShort: `Your password needs at least ${PASSWORD_MIN} characters.`,
     passwordTooLong: 'Your password is too long.',
+    verifyLinkGone: 'This confirmation link has expired or was already used. Log in to get a new one.',
+    alreadyConfirmed: 'Your email address is already confirmed.',
   },
   builders: {
     enterBusinessName: "Please enter your business's name.",
@@ -105,6 +108,7 @@ export const en = {
     notYourEmail: "Use your client's email address, not yours.",
     builderEmail: 'That email belongs to a builder account. Proposals can only go to clients.',
     needProfile: 'Set up your business profile before sending proposals.',
+    confirmEmailFirst: 'Confirm your email address before sending proposals. We sent you a link.',
     priceAgreed: 'The price is agreed. Send a change order to change it.',
     currencyLocked: "The currency can't change once the proposal is accepted.",
     alreadyClaimed: (name: string) => `${name} already has this proposal in their account.`,
@@ -163,6 +167,11 @@ export const en = {
     notYet: 'You can message a client once you have quoted for them or have a project together.',
     enterText: 'Write a message first.',
     tooLong: `Messages can be up to ${n(MESSAGE_MAX)} characters.`,
+  },
+  verifyEmail: {
+    subject: 'Confirm your email address for Casa Fida',
+    intro: 'Open this link to confirm your email address for Casa Fida:',
+    ignore: "If you didn't sign up for Casa Fida, you can ignore this email.",
   },
   proposalEmail: {
     subject: (business: string) => `${business} sent you a project proposal`,

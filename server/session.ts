@@ -3,6 +3,7 @@ import type { Role } from '../shared/rules.ts'
 import { db } from './db.ts'
 import { hashToken, newSessionToken } from './auth.ts'
 import { cookie } from './cookies.ts'
+import { closeStreams } from './events.ts'
 import type { Text } from './i18n/index.ts'
 import { fail } from './validate.ts'
 import type { UserRow } from './users.ts'
@@ -33,7 +34,11 @@ export async function startSession(res: Response, userId: number) {
 
 export async function endSession(req: Request, res: Response) {
   const token = sessionToken(req)
-  if (token) await db.execute('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)])
+  if (token) {
+    const user = await currentUser(req)
+    await db.execute('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)])
+    if (user) closeStreams(user.id, { session: hashToken(token) })
+  }
   res.clearCookie(SESSION_COOKIE, { path: '/' })
 }
 

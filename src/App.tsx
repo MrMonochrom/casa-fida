@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api'
 import { Icon } from './components/Icon'
 import { LanguagePicker } from './components/LanguagePicker'
+import { VerifyEmailBanner } from './components/VerifyEmailBanner'
 import type { IconName } from './components/Icon'
 import { Logo } from './components/Logo'
 import { CountBadge, Empty } from './components/ui'
@@ -192,6 +193,7 @@ export default function App({ user, onUserChange, onLogout }: Props) {
           </div>
         </header>
         <main className="main">
+          {!user.emailVerified && <VerifyEmailBanner />}
           <Screen path={path} user={user} />
         </main>
       </div>

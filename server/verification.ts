@@ -1,0 +1,62 @@
+// Confirming that people own the email address they signed up with. Until they do, proposals sent
+// to that address don't go straight into their account, and builders can't send proposals.
+import type { RowDataPacket } from 'mysql2/promise'
+import type { Language } from '../shared/languages.ts'
+import { hashToken, newSessionToken } from './auth.ts'
+import { db } from './db.ts'
+import { publish } from './events.ts'
+import { messagesIn } from './i18n/index.ts'
+import { appUrl, sendEmail } from './mailer.ts'
+import type { UserRow } from './users.ts'
+
+/** How long a confirmation link works. */
+const LINK_DAYS = 7
+
+/**
+ * Emails the person a new confirmation link; an older one stops working. The email has only fixed
+ * text, never anything someone typed, so signing up can't be used to send other people messages.
+ */
+export async function sendVerificationEmail(user: Pick<UserRow, 'id' | 'email'>, language: Language) {
+  const token = newSessionToken()
+  await db.execute('UPDATE users SET verify_token_hash = ?, verify_expires_at = NOW() + INTERVAL ? DAY WHERE id = ?', [
+    hashToken(token),
+    LINK_DAYS,
+    user.id,
+  ])
+  const say = messagesIn(language).verifyEmail
+  await sendEmail({
+    to: user.email,
+    subject: say.subject,
+    text: [say.intro, '', `${appUrl()}/verify-email?token=${encodeURIComponent(token)}`, '', say.ignore].join('\n'),
+  })
+}
+
+/** The person whose confirmation link has this token, while it still works. */
+export async function userForVerifyToken(token: string): Promise<UserRow | null> {
+  if (!token || token.length > 100) return null
+  const [rows] = await db.execute<UserRow[]>(
+    'SELECT * FROM users WHERE verify_token_hash = ? AND verify_expires_at > NOW()',
+    [hashToken(token)],
+  )
+  return rows[0] ?? null
+}
+
+/**
+ * Marks the person's email address as theirs: from a confirmation link, or an invite link sent to it.
+ * Proposals sent to the address in the meantime go into their account, as they would have straight away.
+ */
+export async function confirmEmail(user: Pick<UserRow, 'id' | 'email' | 'role'>) {
+  await db.execute('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ?', [user.id])
+  if (user.role !== 'client') return
+  const [waiting] = await db.execute<RowDataPacket[]>(
+    "SELECT id, builder_id FROM projects WHERE client_email = ? AND client_id IS NULL AND status = 'proposed'",
+    [user.email],
+  )
+  if (waiting.length === 0) return
+  // The invite links in those emails keep working, and open the proposal now in the account.
+  await db.execute(
+    "UPDATE projects SET client_id = ? WHERE client_email = ? AND client_id IS NULL AND status = 'proposed'",
+    [user.id, user.email],
+  )
+  for (const project of waiting) publish(project.builder_id as number, { type: 'project', projectId: project.id as number })
+}

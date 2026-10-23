@@ -20,6 +20,7 @@ describe('POST /api/signup', () => {
       name: 'Ana',
       role: 'client',
       phone: null,
+      emailVerified: false,
       memberSince: expect.any(Number),
       builderProfile: null,
     })
