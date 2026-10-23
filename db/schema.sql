@@ -14,7 +14,8 @@ CREATE TABLE users (
   name VARCHAR(100) NOT NULL,
   role ENUM('client', 'builder') NOT NULL,
   phone VARCHAR(40) NULL,
-  -- Set once the person opens the link in the confirmation email.
+  -- Set once the person opens a link emailed to them: to confirm, to reset the password, or the
+  -- invite in a proposal email (see projects.invite_emailed).
   email_verified_at TIMESTAMP NULL,
   -- SHA-256 of the token in the newest confirmation link, while it can still be used.
   verify_token_hash CHAR(64) NULL UNIQUE,
@@ -123,6 +124,9 @@ CREATE TABLE projects (
   job_id INT UNSIGNED NULL UNIQUE,
   -- SHA-256 of the token in the invite link, while it can still be used.
   invite_token_hash CHAR(64) NULL UNIQUE,
+  -- Whether that link was only in the proposal email: the builder never saw it. Opening it then
+  -- shows the person can read client_email, so it confirms that address.
+  invite_emailed BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   accepted_at TIMESTAMP NULL,
   completed_at TIMESTAMP NULL,

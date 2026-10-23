@@ -11,6 +11,7 @@ import {
   activeProject,
   createBuilder,
   createClient,
+  newAgent,
   postJob,
   propose,
   resetDb,
@@ -187,6 +188,20 @@ describe('who gets emails', () => {
     const job = await postJob(ana)
     await sendQuote(bob, job.id)
     expect(await emailsTo(ana)).toHaveLength(0)
+  })
+
+  it('includes a client who joined from the invite in a proposal email', async () => {
+    const bob = await createBuilder({ businessName: 'Bob Builds' })
+    const project = await propose(bob, 'ana@example.com')
+    const token = decodeURIComponent(/\/invite\?token=(\S+)/.exec(outbox.at(-1)!.text)![1])
+    const ana = newAgent()
+    await ana.post('/api/signup').send({ name: 'Ana', email: 'ana@example.com', password: PASSWORD, role: 'client' })
+    await ana.post('/api/invites/claim').send({ token })
+    await ana.post(`/api/projects/${project.id}/accept`)
+
+    await bob.agent.post(`/api/projects/${project.id}/invoices`).send({ title: 'Deposit', amount: 500_000, dueDate: '2026-12-01' })
+    await notificationsSent()
+    expect(outbox.filter((e) => e.to === 'ana@example.com').map((e) => e.subject)).toContain('Invoice #1 from Bob Builds')
   })
 
   it('is only people who have confirmed their address', async () => {

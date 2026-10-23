@@ -26,6 +26,7 @@ import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { me, requireRole, requireUser } from '../session.ts'
 import type { UserRow } from '../users.ts'
 import { amountFrom, badRequest, dateFrom, fail, invalid, isEmail, longText, text, wholeFrom } from '../validate.ts'
+import { confirmEmail } from '../verification.ts'
 
 export const projectRoutes = express.Router()
 
@@ -286,10 +287,18 @@ async function sendProposalEmail(
   })
 }
 
-/** A new invite link for a project. Only its hash is stored, so an older link stops working. */
-async function newInviteLink(projectId: number) {
+/**
+ * A new invite link for a project. Only its hash is stored, so an older link stops working.
+ * `emailed`: the link goes only in the proposal email, so opening it confirms the client's address.
+ * A link the builder gets to pass on doesn't, since they could open it themselves.
+ */
+async function newInviteLink(projectId: number, emailed: boolean) {
   const token = newSessionToken()
-  await db.execute('UPDATE projects SET invite_token_hash = ? WHERE id = ?', [hashToken(token), projectId])
+  await db.execute('UPDATE projects SET invite_token_hash = ?, invite_emailed = ? WHERE id = ?', [
+    hashToken(token),
+    emailed,
+    projectId,
+  ])
   return `${appUrl()}/invite?token=${encodeURIComponent(token)}`
 }
 
@@ -360,7 +369,7 @@ projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
   limits.invitesPerBuilderPerDay.hit(key)
 
   const project = (await loadProject(projectId))!
-  const link = owner ? `${appUrl()}/projects/${projectId}` : await newInviteLink(projectId)
+  const link = owner ? `${appUrl()}/projects/${projectId}` : await newInviteLink(projectId, true)
   await sendProposalEmail(builder, project, clientEmail, link, !client, languageOf(req)).catch((err) =>
     console.error('Proposal email failed:', err),
   )
@@ -412,7 +421,7 @@ projectRoutes.post('/projects/:id/invite-link', requireRole('builder'), async (r
   const project = await projectAs(res, req.params.id, 'builder', ['proposed'])
   // The name the builder typed, not the account's own: they don't see that until the client accepts.
   if (project.client_id) return fail(res, 409, (m) => m.projects.alreadyClaimed(project.client_name))
-  res.json({ link: await newInviteLink(project.id) })
+  res.json({ link: await newInviteLink(project.id, false) })
 })
 
 // The client accepts a proposal: the project starts.
@@ -510,9 +519,9 @@ projectRoutes.post('/invites/preview', async (req, res) => {
   })
 })
 
-// Adds the proposal from an invite link to the logged-in client's account. Opening it doesn't confirm
-// the account's email address, even when it's the one the builder typed: the builder can get a
-// fresh invite link too, so having one doesn't show that you can read that email.
+// Adds the proposal from an invite link to the logged-in client's account. If it's the link from the
+// proposal email and this account uses that address, opening it shows they can read that email, so
+// the address is confirmed too. A link the builder asked for doesn't count: they could open it.
 projectRoutes.post('/invites/claim', requireUser, async (req, res) => {
   const user = me(res)
   const project = await projectForToken(req.body?.token)
@@ -521,10 +530,12 @@ projectRoutes.post('/invites/claim', requireUser, async (req, res) => {
     return fail(res, 403, (m) => m.projects.inviteForClients)
   }
   const [result] = await db.execute<ResultSetHeader>(
-    'UPDATE projects SET client_id = ?, invite_token_hash = NULL WHERE id = ? AND (client_id IS NULL OR client_id = ?)',
+    `UPDATE projects SET client_id = ?, invite_token_hash = NULL, invite_emailed = FALSE
+     WHERE id = ? AND (client_id IS NULL OR client_id = ?)`,
     [user.id, project.id, user.id],
   )
   if (result.affectedRows === 0) throw notFound(INVITE_GONE)
+  if (project.invite_emailed && user.email === project.client_email) await confirmEmail(user)
   if (project.client_id === null) publish(project.builder_id, { type: 'project', projectId: project.id })
   res.json({ projectId: project.id })
 })

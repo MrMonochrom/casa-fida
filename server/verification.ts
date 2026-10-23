@@ -42,8 +42,8 @@ export async function userForVerifyToken(token: string): Promise<UserRow | null>
 }
 
 /**
- * Marks the person's email address as theirs, from a confirmation link. (Not from an invite link:
- * the builder can get one of those too.)
+ * Marks the person's email address as theirs: from a confirmation link, a password reset link, or
+ * the invite link in a proposal email (not one the builder asked for: they could open it themselves).
  * Proposals sent to the address in the meantime go into their account, as they would have straight away.
  */
 export async function confirmEmail(user: Pick<UserRow, 'id' | 'email' | 'role'>) {

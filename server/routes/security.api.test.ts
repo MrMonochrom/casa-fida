@@ -115,11 +115,24 @@ describe('proposals and confirmed addresses', () => {
     expect((await ana.agent.post('/api/invites/claim').send({ token: invite })).body).toEqual({ projectId: project.id })
   })
 
-  it("doesn't count opening an invite as confirming the address", async () => {
+  it('counts opening the invite from a proposal email to your own address as confirming it', async () => {
     const ana = await signUpUnconfirmed('ana@example.com')
     const bob = await createBuilder()
     const project = await propose(bob, 'ana@example.com')
     const res = await ana.agent.post('/api/invites/claim').send({ token: tokenIn('invite') })
+    expect(res.body).toEqual({ projectId: project.id })
+    expect((await ana.agent.get('/api/me')).body.user.emailVerified).toBe(true)
+  })
+
+  it("doesn't count an invite link the builder asked for, even opened by the address's owner", async () => {
+    const ana = await signUpUnconfirmed('ana@example.com')
+    const bob = await createBuilder()
+    const project = await propose(bob, 'ana@example.com')
+    const emailed = tokenIn('invite')
+    const link = (await bob.agent.post(`/api/projects/${project.id}/invite-link`)).body.link
+    // The emailed link stops working, and the one Bob passes on doesn't confirm anything.
+    expect((await ana.agent.post('/api/invites/claim').send({ token: emailed })).status).toBe(404)
+    const res = await ana.agent.post('/api/invites/claim').send({ token: new URL(link).searchParams.get('token') })
     expect(res.body).toEqual({ projectId: project.id })
     expect((await ana.agent.get('/api/me')).body.user.emailVerified).toBe(false)
   })

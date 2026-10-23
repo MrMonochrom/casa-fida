@@ -28,7 +28,7 @@ export interface User {
   name: string
   role: Role
   phone: string | null
-  /** Whether they've opened the link in the confirmation email. */
+  /** Whether they've opened a link emailed to them: to confirm, reset the password, or a proposal's invite. */
   emailVerified: boolean
   /** Which emails they get about things that happen while they're away. */
   notifications: EmailSettings
