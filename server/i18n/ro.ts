@@ -110,6 +110,7 @@ export const ro: ServerMessages = {
     builderEmail: 'Acest email aparține unui cont de constructor. Propunerile pot fi trimise doar clienților.',
     needProfile: 'Completați profilul firmei înainte de a trimite propuneri.',
     priceAgreed: 'Prețul este convenit. Trimiteți o modificare pentru a-l schimba.',
+    currencyLocked: 'Moneda nu se mai poate schimba după ce propunerea a fost acceptată.',
     alreadyClaimed: (name: string) => `${name} are deja această propunere în cont.`,
     changed: 'Această propunere s-a schimbat. Vă rugăm să o verificați din nou.',
     chooseRating: 'Alegeți o notă de la 1 la 5 stele.',

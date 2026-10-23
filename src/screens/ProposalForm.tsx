@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { parseMoney } from '../../shared/money'
+import { parseMoney } from '../format'
 import { DESCRIPTION_MAX, NAME_MAX, PLACE_MAX, TITLE_MAX } from '../../shared/rules'
 import { api } from '../api'
 import { CurrencyField } from '../components/CurrencyField'

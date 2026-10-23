@@ -106,6 +106,7 @@ export const en = {
     builderEmail: 'That email belongs to a builder account. Proposals can only go to clients.',
     needProfile: 'Set up your business profile before sending proposals.',
     priceAgreed: 'The price is agreed. Send a change order to change it.',
+    currencyLocked: "The currency can't change once the proposal is accepted.",
     alreadyClaimed: (name: string) => `${name} already has this proposal in their account.`,
     changed: 'This proposal has changed. Please look again.',
     chooseRating: 'Choose a rating from 1 to 5 stars.',

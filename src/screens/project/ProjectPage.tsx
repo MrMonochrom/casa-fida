@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { moneyInputValue, parseMoney } from '../../../shared/money'
 import { DESCRIPTION_MAX, PLACE_MAX, REVIEW_MAX, TITLE_MAX } from '../../../shared/rules'
 import { api } from '../../api'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -20,7 +19,7 @@ import {
   TextAreaField,
   TextField,
 } from '../../components/ui'
-import { dateText, dayDateText, formatMoney, projectStatus, weeksText } from '../../format'
+import { dateText, dayDateText, formatMoney, moneyInputValue, parseMoney, projectStatus, weeksText } from '../../format'
 import { fill, getT, useT } from '../../i18n'
 import { Link } from '../../components/Link'
 import { navigate, useSearchParams } from '../../router'

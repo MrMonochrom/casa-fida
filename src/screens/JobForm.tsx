@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { moneyInputValue, parseMoney } from '../../shared/money'
+import { moneyInputValue, parseMoney } from '../format'
 import { DESCRIPTION_MAX, PLACE_MAX, TITLE_MAX, TRADE_KEYS } from '../../shared/rules'
 import type { JobTiming, Trade } from '../../shared/rules'
 import { api } from '../api'

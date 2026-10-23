@@ -360,7 +360,7 @@ projectRoutes.put('/projects/:id', requireRole('builder'), async (req, res) => {
   }
   let currency = project.currency
   if (req.body?.currency !== undefined && req.body.currency !== project.currency) {
-    if (project.status !== 'proposed') return fail(res, 409, (m) => m.projects.priceAgreed)
+    if (project.status !== 'proposed') return fail(res, 409, (m) => m.projects.currencyLocked)
     if (!isCurrency(req.body.currency)) return badRequest(res, (m) => m.general.chooseCurrency)
     currency = req.body.currency
   }

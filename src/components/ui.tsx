@@ -226,7 +226,7 @@ export function TextField({ label, hint, extra, value, onChange, className, ...i
   )
 }
 
-/** An amount of money, typed like "1,250" or "1250.50". The form reads it with parseMoney. */
+/** An amount of money, typed the way the app's language writes numbers. The form reads it with parseMoney from format.ts. */
 export function MoneyField({
   label,
   hint,

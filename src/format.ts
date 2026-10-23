@@ -1,5 +1,11 @@
 // Turning what the API sends into words and dates people read, in the app's language.
-import { formatChange as changeIn, formatMoney as moneyIn, currencySign as signIn } from '../shared/money'
+import {
+  formatChange as changeIn,
+  formatMoney as moneyIn,
+  moneyInputValue as inputValueIn,
+  parseMoney as parseIn,
+  currencySign as signIn,
+} from '../shared/money'
 import type { Currency } from '../shared/money'
 import type { JobTiming, Trade } from '../shared/rules'
 import { getLanguage, getLocale, getT } from './i18n'
@@ -81,6 +87,12 @@ export const formatChange = (cents: number, currency: Currency) => changeIn(cent
 
 /** What goes in front of an amount box: "$", "€", "₽", "MDL" or "RON". */
 export const currencySign = (currency: Currency) => signIn(currency, getLanguage())
+
+/** An amount typed in a money box, in cents: "1,250.50" in English, "1.250,50" in Romanian and Russian. */
+export const parseMoney = (input: string) => parseIn(input, getLanguage())
+
+/** Cents for a money box to start with: "1250.50" in English, "1250,50" in Romanian and Russian. */
+export const moneyInputValue = (cents: number) => inputValueIn(cents, getLanguage())
 
 /** "US dollar (USD)", "Leu moldovenesc (MDL)", "Российский рубль (RUB)". */
 export function currencyName(currency: Currency): string {

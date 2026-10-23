@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { moneyInputValue, parseMoney } from '../../../shared/money'
 import { CHANGE_DAYS_MAX, DESCRIPTION_MAX, TITLE_MAX } from '../../../shared/rules'
 import { api } from '../../api'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
@@ -15,6 +14,8 @@ import {
   formatMoney,
   invoiceStatus,
   isoDate,
+  moneyInputValue,
+  parseMoney,
 } from '../../format'
 import { fill, useT } from '../../i18n'
 import { useSession } from '../../session'

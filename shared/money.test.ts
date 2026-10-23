@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LANGUAGE_KEYS } from './languages.ts'
 import { CURRENCIES, currencySign, formatChange, formatMoney, isCurrency, moneyInputValue, parseMoney } from './money.ts'
 
 describe('formatMoney', () => {
@@ -69,23 +70,51 @@ describe('parseMoney', () => {
     ['$ 10', 1000],
     ['€15', 1500],
     ['₽ 2 500', 250_000],
-    // A comma or a dot before the cents, as in Romanian and Russian.
-    ['1250,50', 125_050],
-    ['1.250,50', 125_050],
-    ['1 250,5', 125_050],
-    ['1,25', 125],
-    ['12.345', 1_234_500],
     ['12,345,678.90', 1_234_567_890],
   ])('reads %j', (input, cents) => {
     expect(parseMoney(input)).toBe(cents)
   })
 
-  it.each(['', 'abc', '1,2345', '12,34,567', '1.2.3', '--5', '5-', '1e5', '.5', '99999999999999999999'])(
-    'refuses %j',
-    (input) => {
-      expect(parseMoney(input)).toBeNull()
-    },
-  )
+  // Romanian and Russian put a comma before the cents and may group thousands with a dot.
+  it.each([
+    ['1250', 125_000],
+    ['1250,50', 125_050],
+    ['1.250,50', 125_050],
+    ['1 250,5', 125_050],
+    ['1,25', 125],
+    ['1.250', 125_000],
+    ['12.345', 1_234_500],
+    ['-500', -50_000],
+  ])('reads %j in Romanian and Russian', (input, cents) => {
+    expect(parseMoney(input, 'ro')).toBe(cents)
+    expect(parseMoney(input, 'ru')).toBe(cents)
+  })
+
+  it.each([
+    '',
+    'abc',
+    '1,2345',
+    '12,34,567',
+    '1.2.3',
+    '--5',
+    '5-',
+    '1e5',
+    '.5',
+    '99999999999999999999',
+    // A comma before the cents, or three digits after the dot, isn't how English writes an amount.
+    '1250,50',
+    '1.250,50',
+    '1,25',
+    '1.250',
+    '0.500',
+  ])('refuses %j', (input) => {
+    expect(parseMoney(input)).toBeNull()
+  })
+
+  it.each(['1250.50', '1,250.50', '1.2345', ',5'])('refuses %j in Romanian and Russian', (input) => {
+    expect(parseMoney(input, 'ro')).toBeNull()
+    expect(parseMoney(input, 'ru')).toBeNull()
+  })
 })
 
 describe('moneyInputValue', () => {
@@ -97,7 +126,16 @@ describe('moneyInputValue', () => {
     expect(moneyInputValue(0)).toBe('0')
   })
 
-  it('round-trips through parseMoney', () => {
-    for (const cents of [0, 1, 99, 100, 123_456, -7_501]) expect(parseMoney(moneyInputValue(cents))).toBe(cents)
+  it('puts a comma before the cents in Romanian and Russian', () => {
+    expect(moneyInputValue(125_050, 'ro')).toBe('1250,50')
+    expect(moneyInputValue(120_000, 'ru')).toBe('1200')
+  })
+
+  it('round-trips through parseMoney in each language', () => {
+    for (const language of LANGUAGE_KEYS) {
+      for (const cents of [0, 1, 99, 100, 123_456, -7_501]) {
+        expect(parseMoney(moneyInputValue(cents, language), language)).toBe(cents)
+      }
+    }
   })
 })

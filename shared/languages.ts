@@ -9,7 +9,7 @@ export const LANGUAGES = {
 } as const
 export type Language = keyof typeof LANGUAGES
 export const LANGUAGE_KEYS = Object.keys(LANGUAGES) as Language[]
-export const isLanguage = (value: unknown): value is Language => typeof value === 'string' && value in LANGUAGES
+export const isLanguage = (value: unknown): value is Language => typeof value === 'string' && Object.hasOwn(LANGUAGES, value)
 
 /** The cookie that tells the server which language to answer in. */
 export const LANGUAGE_COOKIE = 'cf_lang'

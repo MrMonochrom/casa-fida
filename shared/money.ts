@@ -52,15 +52,20 @@ export function currencySign(currency: Currency, language: Language = 'en'): str
   return parts.find((p) => p.type === 'currency')?.value ?? currency
 }
 
+/** What separates the cents in each language. The other one of "." and "," groups thousands. */
+const DECIMAL_SEPARATOR: Record<Language, '.' | ','> = { en: '.', ro: ',', ru: ',' }
+
 /**
- * Reads an amount typed by a person into cents. Either "," or "." can separate the cents, since
- * Romanian and Russian use a comma: "1,250", "$1250.5", "1.250,50", "1 250,5" and "-500" all work.
- * A separator followed by one or two digits at the end starts the cents; followed by three, it
- * groups thousands. Returns null for anything else.
+ * Reads an amount typed by a person into cents, the way the language writes numbers: in English
+ * "1,250", "$1250.5" and "-500"; in Romanian and Russian "1.250,50" and "1 250,5". "1.250" is
+ * 1,250 in Romanian but no amount in English, so a price is never read 1,000 times too big.
+ * Returns null for anything that isn't an amount with at most two decimals.
  */
-export function parseMoney(input: string): number | null {
+export function parseMoney(input: string, language: Language = 'en'): number | null {
   const cleaned = input.trim().replace(/[\s$€₽']/g, '').replace(/^−/, '-')
-  const match = /^(-?)(\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,](\d{1,2}))?$/.exec(cleaned)
+  const decimal = DECIMAL_SEPARATOR[language]
+  const group = decimal === '.' ? ',' : '.'
+  const match = new RegExp(`^(-?)(\\d{1,3}(?:[${group}]\\d{3})+|\\d+)(?:[${decimal}](\\d{1,2}))?$`).exec(cleaned)
   if (!match) return null
   const [, sign, whole, fraction = ''] = match
   const cents = Number(whole.replace(/[.,]/g, '')) * 100 + Number(fraction.padEnd(2, '0'))
@@ -68,10 +73,11 @@ export function parseMoney(input: string): number | null {
   return sign && cents !== 0 ? -cents : cents
 }
 
-/** Cents as a plain number for an input box: 125050 → "1250.50", 120000 → "1200". */
-export function moneyInputValue(cents: number): string {
+/** Cents as a plain number for an input box: 125050 → "1250.50" ("1250,50" in Romanian), 120000 → "1200". */
+export function moneyInputValue(cents: number, language: Language = 'en'): string {
   const sign = cents < 0 ? '-' : ''
   const abs = Math.abs(cents)
   const fraction = abs % 100
-  return `${sign}${Math.floor(abs / 100)}${fraction ? `.${String(fraction).padStart(2, '0')}` : ''}`
+  const decimals = fraction ? `${DECIMAL_SEPARATOR[language]}${String(fraction).padStart(2, '0')}` : ''
+  return `${sign}${Math.floor(abs / 100)}${decimals}`
 }

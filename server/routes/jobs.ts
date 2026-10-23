@@ -241,7 +241,7 @@ async function ownJob(req: Request, res: Response) {
 jobRoutes.put('/jobs/:id', requireRole('client'), async (req, res) => {
   const job = await ownJob(req, res)
   if (job.status !== 'open') return fail(res, 409, (m) => m.jobs.onlyOpenChange)
-  const input = readJob({ currency: job.currency, ...req.body })
+  const input = readJob({ ...req.body, currency: req.body?.currency ?? job.currency })
   if ('error' in input) return badRequest(res, input.error)
   // Quotes are in the job's currency, so it stays once any have come in.
   if (input.currency !== job.currency && Number(job.quote_count) > 0) {
