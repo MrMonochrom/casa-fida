@@ -21,6 +21,9 @@ INSERT INTO users (id, email, password_hash, name, role, phone, created_at) VALU
 -- The sample accounts have confirmed their email addresses.
 UPDATE users SET email_verified_at = created_at;
 
+-- Priya is on Pro, with no end date; the other builders are on the free plan and can try Pro.
+UPDATE users SET plan = 'pro' WHERE id = 2;
+
 INSERT INTO builder_profiles
   (user_id, business_name, headline, about, service_area, years_in_business, license_number, insured) VALUES
   (1, 'Reid & Sons Construction', 'Family-run general contractor for new homes, additions and whole-home remodels.',

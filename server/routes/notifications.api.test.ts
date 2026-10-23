@@ -183,7 +183,7 @@ describe('who gets emails', () => {
     const ana = await createClient()
     const bob = await createBuilder()
     const res = await ana.agent.put('/api/me/notifications').send({ quotes: false, projects: true, messages: true })
-    expect(res.body.user.notifications).toEqual({ quotes: false, projects: true, messages: true })
+    expect(res.body.user.notifications).toEqual({ quotes: false, projects: true, messages: true, jobs: true })
     const job = await postJob(ana)
     await sendQuote(bob, job.id)
     expect(await emailsTo(ana)).toHaveLength(0)

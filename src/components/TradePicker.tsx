@@ -1,16 +1,18 @@
-import { MAX_TRADES, TRADE_KEYS } from '../../shared/rules'
+import { TRADE_KEYS } from '../../shared/rules'
 import type { Trade } from '../../shared/rules'
 import { useT } from '../i18n'
 
 interface Props {
   value: Trade[]
   onChange: (trades: Trade[]) => void
+  /** How many the builder's plan allows. */
+  max: number
 }
 
-/** Toggle buttons for the trades a builder offers, up to MAX_TRADES. */
-export function TradePicker({ value, onChange }: Props) {
+/** Toggle buttons for the trades a builder offers, up to what their plan allows. */
+export function TradePicker({ value, onChange, max }: Props) {
   const t = useT()
-  const full = value.length >= MAX_TRADES
+  const full = value.length >= max
 
   function toggle(trade: Trade) {
     onChange(value.includes(trade) ? value.filter((t) => t !== trade) : [...value, trade])
@@ -19,7 +21,7 @@ export function TradePicker({ value, onChange }: Props) {
   return (
     <fieldset className="field">
       <legend className="field__label">
-        {t.profileForm.trades} <span className="field__extra">{t.profileForm.upTo(MAX_TRADES)}</span>
+        {t.profileForm.trades} <span className="field__extra">{t.profileForm.upTo(max)}</span>
       </legend>
       <div className="chips">
         {TRADE_KEYS.map((trade) => {

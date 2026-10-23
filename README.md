@@ -24,6 +24,7 @@ If your database was made before currencies or email confirmation were added, br
 npm run db:shell < db/migrations/001-currencies.sql           # existing jobs and projects stay in US dollars
 npm run db:shell < db/migrations/002-email-verification.sql   # existing accounts count as confirmed
 npm run db:shell < db/migrations/003-password-reset-and-notifications.sql
+npm run db:shell < db/migrations/004-builder-plans.sql
 ```
 
 Without `SMTP_URL`, emails (like the link that confirms a new account's email address) are printed in the terminal running `npm run dev`.
@@ -39,7 +40,7 @@ Without `SMTP_URL`, emails (like the link that confirms a new account's email ad
 | Olivia Brooks, client | olivia.brooks@example.com | Finished projects and the reviews she left. |
 | Noah Patel, client | noah.patel@example.com | A new client with two open jobs and no quotes yet. |
 | Marcus Reid, Reid & Sons Construction | marcus.reid@example.com | Running the extension project: stages, updates, change orders and invoices. |
-| Priya Shah, Shah Kitchen & Bath | priya.shah@example.com | A proposal waiting for David, and a quote on Emma's bathroom job. |
+| Priya Shah, Shah Kitchen & Bath | priya.shah@example.com | A proposal waiting for David, and a quote on Emma's bathroom job. On the Pro plan. |
 | Grace Kim, Kim Renovation Co. | grace.kim@example.com | Finding work: Noah's jobs are in her trades. |
 | Tom Becker, Lena Ortiz, Sam Whitfield | tom.becker@, lena.ortiz@, sam.whitfield@example.com | Builders with finished projects and reviews. |
 
@@ -62,6 +63,7 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 - **Find work:** open jobs in your trades (or any trade), and quotes you can change or withdraw until the client answers.
 - **Send a proposal** for work you've agreed on outside the app, with its stages.
 - **Run the project:** tick off stages, post updates with photos (shrunk in the browser before uploading), send change orders and invoices, mark invoices paid when the money arrives, and mark the project completed.
+- **Free or Pro plan:** on Free, an email once a day lists new jobs in your trades; up to 30 new quotes a day and 6 trades. Pro emails each new job the moment it's posted, and allows 100 new quotes a day and 12 trades. Every builder can try Pro free for 14 days from Account. Paying for Pro comes once online payments are set up; until then, `npm run plan` puts a builder on a plan by hand.
 
 ### For both
 
@@ -90,6 +92,7 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 | `npm run db:users` | Prints every account, with builders' businesses and trades |
 | `npm run db:shell` | Opens a MySQL prompt on the `casa_fida` database |
 | `npm run db:reset` | Deletes all data and reloads the sample data (asks first) |
+| `npm run plan -- <email> pro [days]` | Puts a builder on Pro (for that many days, or with no end), or `free` to go back |
 
 ## How it fits together
 
@@ -133,7 +136,7 @@ Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx
 ## Tests
 
 ```sh
-npm test                 # all 512 tests
+npm test                 # all 531 tests
 npx vitest run --project web
 npx vitest run server/routes/billing.api.test.ts
 ```
@@ -165,7 +168,7 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 
 | Not done yet | Today |
 |---|---|
-| Paying in the app | Clients pay the way they agree with their builder, who marks each invoice paid. |
+| Paying in the app | Clients pay the way they agree with their builder, who marks each invoice paid. Builders can't pay for Pro yet: there's the free trial, and `npm run plan`. |
 | Email digests | Each notification is its own email; there's no daily summary. |
 | Files such as plans and contracts | Only photos, on project updates. |
 | Running several server processes | Live updates and login limits are kept in one process's memory. |

@@ -2,6 +2,7 @@
 // belong to; times are milliseconds since 1970 (like Date.now()); dates without a time are
 // 'YYYY-MM-DD' strings.
 import type { Currency } from '../shared/money'
+import type { Plan } from '../shared/plans'
 import type { JobTiming, Role, Trade } from '../shared/rules'
 
 export interface BuilderProfile {
@@ -19,6 +20,15 @@ export interface EmailSettings {
   quotes: boolean
   projects: boolean
   messages: boolean
+  /** Builders: new jobs in their trades (instantly on Pro, once a day on Free). */
+  jobs: boolean
+}
+
+/** A builder's plan. endsAt is when Pro runs out (null: no end date, or on the free plan). */
+export interface PlanInfo {
+  name: Plan
+  endsAt: number | null
+  trialAvailable: boolean
 }
 
 /** The logged-in person. */
@@ -32,6 +42,8 @@ export interface User {
   emailVerified: boolean
   /** Which emails they get about things that happen while they're away. */
   notifications: EmailSettings
+  /** Builders only; null for clients. */
+  plan: PlanInfo | null
   memberSince: number
   /** Builders only, once they've set up their business profile. */
   builderProfile: BuilderProfile | null

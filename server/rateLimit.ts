@@ -1,4 +1,5 @@
 import type { Response } from 'express'
+import { PLAN_LIMITS } from '../shared/plans.ts'
 import { fail } from './validate.ts'
 
 const limiters = new Set<Limiter>()
@@ -86,6 +87,7 @@ export const limits = {
   /** Password reset emails: asked for from one IP address, and sent to one address. */
   passwordResetsPerIp: new Limiter(10, 60 * MINUTE),
   passwordResetsPerEmail: new Limiter(3, 60 * MINUTE),
-  /** New quotes one builder can send in a day: each one emails a client. */
-  newQuotesPerBuilderPerDay: new Limiter(30, DAY),
+  /** New quotes one builder can send in a day (each one emails a client), by plan. */
+  newQuotesPerBuilderPerDay: new Limiter(PLAN_LIMITS.free.newQuotesPerDay, DAY),
+  newQuotesPerProBuilderPerDay: new Limiter(PLAN_LIMITS.pro.newQuotesPerDay, DAY),
 }

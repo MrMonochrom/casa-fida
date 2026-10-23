@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { PLAN_LIMITS, TRIAL_DAYS } from '../../shared/plans'
 import { NAME_MAX, PASSWORD_MIN } from '../../shared/rules'
 import { api } from '../api'
 import { BuilderProfileForm } from '../components/BuilderProfileForm'
@@ -10,7 +11,10 @@ import { useT } from '../i18n'
 import { useSession } from '../session'
 import type { EmailSettings } from '../types'
 
-/** Your details, your business profile (builders), your password, which emails you get, and logging out. */
+/**
+ * Your details, your plan and business profile (builders), your password, which emails you get,
+ * and logging out.
+ */
 export function Account() {
   const t = useT()
   const { user, onUserChange, onLogout } = useSession()
@@ -27,6 +31,12 @@ export function Account() {
         }
       />
       <div className="account">
+        {user.role === 'builder' && (
+          <section className="section">
+            <h2 className="section__title">{t.plan.title}</h2>
+            <PlanCard />
+          </section>
+        )}
         {user.role === 'builder' && (
           <section className="section">
             <div className="section__header">
@@ -111,11 +121,90 @@ function DetailsForm() {
   )
 }
 
+/** A builder's plan: what Free and Pro each give, and the one free trial of Pro. */
+function PlanCard() {
+  const t = useT()
+  const { user, onUserChange } = useSession()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const plan = user.plan ?? { name: 'free', endsAt: null, trialAvailable: true }
+  const pro = plan.name === 'pro'
+  const rows = [
+    { label: t.plan.jobAlerts, free: t.plan.daily, pro: t.plan.instant },
+    {
+      label: t.plan.quotesPerDay,
+      free: String(PLAN_LIMITS.free.newQuotesPerDay),
+      pro: String(PLAN_LIMITS.pro.newQuotesPerDay),
+    },
+    { label: t.plan.trades, free: String(PLAN_LIMITS.free.trades), pro: String(PLAN_LIMITS.pro.trades) },
+  ]
+  const offerTrial = !pro && plan.trialAvailable
+
+  async function startTrial() {
+    setBusy(true)
+    setError(null)
+    try {
+      onUserChange(await api.startTrial())
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card plan">
+      <p className="plan__status">
+        <span className={`pill ${pro ? 'pill--brand' : 'pill--neutral'}`}>{pro ? t.plan.pro : t.plan.free}</span>
+        <span>{pro ? (plan.endsAt ? t.plan.proUntil(dateText(plan.endsAt)) : t.plan.proNoEnd) : t.plan.onFree}</span>
+      </p>
+      <table className="plan__table">
+        <thead>
+          <tr>
+            <td />
+            <th scope="col" className={pro ? '' : 'plan__current'}>
+              {t.plan.free}
+            </th>
+            <th scope="col" className={pro ? 'plan__current' : ''}>
+              {t.plan.pro}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <th scope="row">{row.label}</th>
+              <td className={pro ? '' : 'plan__current'}>{row.free}</td>
+              <td className={pro ? 'plan__current' : ''}>{row.pro}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {offerTrial && (
+        <div className="plan__trial">
+          <button type="button" className="button button--primary" onClick={startTrial} disabled={busy}>
+            {busy ? t.common.oneMoment : t.plan.startTrial(TRIAL_DAYS)}
+          </button>
+          <p className="muted small">{t.plan.trialNote}</p>
+        </div>
+      )}
+      <FormError error={error} />
+      <p className="muted small">{t.plan.paidSoon}</p>
+    </div>
+  )
+}
+
 function EmailSettingsForm() {
   const t = useT()
   const { user, onUserChange } = useSession()
   // A page opened before email settings existed has none for the account yet: they start all on.
-  const [settings, setSettings] = useState(user.notifications ?? { quotes: true, projects: true, messages: true })
+  const [settings, setSettings] = useState<EmailSettings>({
+    quotes: true,
+    projects: true,
+    messages: true,
+    jobs: true,
+    ...(user.notifications as Partial<EmailSettings> | undefined),
+  })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -124,6 +213,9 @@ function EmailSettingsForm() {
     { key: 'quotes', label: builder ? t.emails.quotesBuilder : t.emails.quotesClient },
     { key: 'projects', label: builder ? t.emails.projectsBuilder : t.emails.projectsClient },
     { key: 'messages', label: t.emails.messages },
+    ...(builder
+      ? [{ key: 'jobs' as const, label: user.plan?.name === 'pro' ? t.emails.jobsInstant : t.emails.jobsDaily }]
+      : []),
   ]
 
   async function handleSubmit(e: FormEvent) {

@@ -1,4 +1,5 @@
 import type { RowDataPacket } from 'mysql2/promise'
+import type { Plan } from '../shared/plans.ts'
 import type { Role, Trade } from '../shared/rules.ts'
 import { db, ms } from './db.ts'
 
@@ -13,6 +14,10 @@ export interface UserRow extends RowDataPacket {
   language: string
   email_quotes: number
   email_projects: number
+  email_jobs: number
+  plan: Plan
+  plan_ends_at: string | null
+  trial_used_at: string | null
   email_messages: number
   created_at: string
 }
@@ -60,10 +65,25 @@ export async function builderProfileOf(userId: number): Promise<BuilderProfile |
 }
 
 /** Everything the logged-in person may see about their own account (never the password hash). */
+/**
+ * SQL that's true while a builder is on Pro: their plan says so and its time hasn't run out. The
+ * database's clock decides, so the server's time zone can't shift when Pro ends.
+ */
+export const isPro = (table = '') =>
+  `(${table}plan = 'pro' AND (${table}plan_ends_at IS NULL OR ${table}plan_ends_at > NOW()))`
+
+/** The plan a builder is on right now. */
+export async function planOf(userId: number): Promise<Plan> {
+  const [rows] = await db.execute<RowDataPacket[]>(`SELECT ${isPro()} AS pro FROM users WHERE id = ?`, [userId])
+  return rows[0]?.pro ? 'pro' : 'free'
+}
+
 export async function ownAccount(user: UserRow) {
-  const [rows] = await db.execute<RowDataPacket[]>(`SELECT ${ms('created_at')} AS created FROM users WHERE id = ?`, [
-    user.id,
-  ])
+  const [rows] = await db.execute<RowDataPacket[]>(
+    `SELECT ${ms('created_at')} AS created, ${ms('plan_ends_at')} AS plan_ends, ${isPro()} AS pro FROM users WHERE id = ?`,
+    [user.id],
+  )
+  const pro = Boolean(rows[0].pro)
   return {
     id: user.id,
     email: user.email,
@@ -75,7 +95,17 @@ export async function ownAccount(user: UserRow) {
       quotes: Boolean(user.email_quotes),
       projects: Boolean(user.email_projects),
       messages: Boolean(user.email_messages),
+      jobs: Boolean(user.email_jobs),
     },
+    // Builders only. endsAt is when Pro runs out (null: no end, or on the free plan).
+    plan:
+      user.role === 'builder'
+        ? {
+            name: pro ? 'pro' : 'free',
+            endsAt: pro && rows[0].plan_ends !== null ? Number(rows[0].plan_ends) : null,
+            trialAvailable: user.trial_used_at === null,
+          }
+        : null,
     memberSince: Number(rows[0].created),
     builderProfile: user.role === 'builder' ? await builderProfileOf(user.id) : null,
   }

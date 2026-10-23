@@ -19,7 +19,8 @@
     "db:status": "sh db/mysql.sh status",
     "db:users": "sh db/mysql.sh users",
     "db:shell": "sh db/mysql.sh shell",
-    "db:reset": "sh db/mysql.sh reset"
+    "db:reset": "sh db/mysql.sh reset",
+    "plan": "node server/scripts/set-plan.ts"
   },
   "dependencies": {
     "express": "^5.3.0",

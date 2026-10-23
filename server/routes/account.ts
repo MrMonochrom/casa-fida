@@ -7,8 +7,9 @@ import { hashPassword, hashToken, verifyPassword } from '../auth.ts'
 import { closeStreams } from '../events.ts'
 import { chosenLanguage, languageOf } from '../i18n/index.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
-import { currentUser, endSession, me, requireUser, sessionToken, startSession } from '../session.ts'
-import { loadUser, ownAccount } from '../users.ts'
+import { currentUser, endSession, me, requireRole, requireUser, sessionToken, startSession } from '../session.ts'
+import { loadUser, ownAccount, planOf } from '../users.ts'
+import { TRIAL_DAYS } from '../../shared/plans.ts'
 import type { UserRow } from '../users.ts'
 import { badRequest, fail, invalid, isEmail, passwordProblem, text } from '../validate.ts'
 import { confirmEmail, sendVerificationEmail, userForVerifyToken } from '../verification.ts'
@@ -142,12 +143,23 @@ accountRoutes.put('/me/password', requireUser, async (req, res) => {
 accountRoutes.put('/me/notifications', requireUser, async (req, res) => {
   const user = me(res)
   const wants = (key: string) => req.body?.[key] !== false
-  await db.execute('UPDATE users SET email_quotes = ?, email_projects = ?, email_messages = ? WHERE id = ?', [
-    wants('quotes'),
-    wants('projects'),
-    wants('messages'),
-    user.id,
-  ])
+  await db.execute(
+    'UPDATE users SET email_quotes = ?, email_projects = ?, email_messages = ?, email_jobs = ? WHERE id = ?',
+    [wants('quotes'), wants('projects'), wants('messages'), wants('jobs'), user.id],
+  )
+  res.json({ user: await ownAccount((await loadUser(user.id))!) })
+})
+
+// Starts a builder's one free trial of Pro. Paying for Pro comes once online payments are set up.
+accountRoutes.post('/me/plan/trial', requireRole('builder'), async (_req, res) => {
+  const user = me(res)
+  if ((await planOf(user.id)) === 'pro') return fail(res, 409, (m) => m.plans.alreadyPro)
+  const [result] = await db.execute<ResultSetHeader>(
+    `UPDATE users SET plan = 'pro', plan_ends_at = NOW() + INTERVAL ? DAY, trial_used_at = NOW()
+     WHERE id = ? AND trial_used_at IS NULL`,
+    [TRIAL_DAYS, user.id],
+  )
+  if (result.affectedRows === 0) return fail(res, 409, (m) => m.plans.trialUsed)
   res.json({ user: await ownAccount((await loadUser(user.id))!) })
 })
 

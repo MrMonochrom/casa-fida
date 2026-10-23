@@ -6,7 +6,6 @@ import {
   CHANGE_DAYS_MAX,
   DESCRIPTION_MAX,
   HEADLINE_MAX,
-  MAX_TRADES,
   MESSAGE_MAX,
   PASSWORD_MIN,
   PHOTOS_PER_UPDATE,
@@ -59,7 +58,7 @@ export const en = {
     enterAbout: 'Tell clients a little about your business.',
     aboutTooLong: `Keep "About" under ${n(ABOUT_MAX)} characters.`,
     enterArea: 'Please enter the area you work in.',
-    chooseTrades: `Choose between 1 and ${MAX_TRADES} trades.`,
+    chooseTrades: (max: number) => `Choose between 1 and ${max} trades.`,
     yearsWhole: 'Years in business should be a whole number.',
     licenseTooLong: 'That license number is too long.',
     unknownTrade: 'Unknown trade.',
@@ -80,6 +79,10 @@ export const en = {
     alreadyClosed: 'This job is already closed.',
     alreadyTaken: 'This job has already been closed or given to a builder.',
     currencyLocked: "The currency can't change once builders have quoted.",
+  },
+  plans: {
+    trialUsed: "You've already used your free trial of Pro.",
+    alreadyPro: "You're already on Pro.",
   },
   quotes: {
     confirmEmailFirst: 'Confirm your email address before sending quotes. We sent you a link.',
@@ -221,6 +224,21 @@ export const en = {
     projectCompleted: (business: string, project: string) => ({
       subject: `${project} is completed`,
       text: `${business} marked “${project}” as completed. How did it go? You can leave a review.`,
+    }),
+    newJob: (title: string, location: string) => ({
+      subject: `New job: ${title}`,
+      text: `A client posted a job in your trades: “${title}”, in ${location}. Be the first to quote.`,
+    }),
+    jobDigest: (jobs: { title: string; location: string }[], total: number) => ({
+      subject: `${total} new job${total === 1 ? '' : 's'} in your trades`,
+      text: [
+        'New jobs in your trades:',
+        '',
+        ...jobs.map((job) => `• ${job.title} · ${job.location}`),
+        ...(total > jobs.length ? [`…and ${total - jobs.length} more.`] : []),
+        '',
+        "With Pro, you hear about each job the moment it's posted.",
+      ].join('\n'),
     }),
     message: (name: string) => ({
       subject: `New message from ${name}`,

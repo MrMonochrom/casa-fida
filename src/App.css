@@ -2187,6 +2187,55 @@ button.photo:hover img {
   gap: 8px;
 }
 
+/* A builder's plan on Account: Free and Pro side by side, the current one highlighted. */
+.plan {
+  display: grid;
+  gap: 16px;
+}
+
+.plan__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.plan__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.93rem;
+}
+
+.plan__table th,
+.plan__table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan__table thead th {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.plan__table tbody th {
+  font-weight: 500;
+}
+
+.plan__table .plan__current {
+  background: var(--brand-soft);
+  font-weight: 600;
+}
+
+.plan__trial {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
 .table-wrap {
   padding: 0;
   overflow-x: auto;

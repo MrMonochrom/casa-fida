@@ -106,6 +106,8 @@ export const api = {
   verifyEmail: (token: string) =>
     request<{ email: string }>('POST', '/verify-email', { token }).then((r) => r.email),
   resendVerification: () => request<void>('POST', '/me/verify-email', {}),
+  /** Starts a builder's one free trial of Pro. */
+  startTrial: () => request<{ user: User }>('POST', '/me/plan/trial', {}).then((r) => r.user),
   saveEmailSettings: (settings: EmailSettings) =>
     request<{ user: User }>('PUT', '/me/notifications', settings).then((r) => r.user),
   /** Emails a link to choose a new password, if an account uses the address. */

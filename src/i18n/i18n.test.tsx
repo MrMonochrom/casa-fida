@@ -34,7 +34,7 @@ const read = (messages: object, path: string) =>
   path.split('.').reduce<unknown>((at, key) => (at as Record<string, unknown>)[key], messages)
 
 // Words that are the same in English.
-const SAME = new Set(['common.email', 'jobs.client', 'projects.client', 'common.placePlaceholder'])
+const SAME = new Set(['common.email', 'jobs.client', 'projects.client', 'common.placePlaceholder', 'plan.pro'])
 
 describe('translations', () => {
   it.each([

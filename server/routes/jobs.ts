@@ -17,10 +17,10 @@ import { db, inTransaction, ms } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
 import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
-import { notify } from '../notifications.ts'
+import { notify, sendJobAlerts } from '../notifications.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { me, requireRole, requireUser } from '../session.ts'
-import { shortName } from '../users.ts'
+import { planOf, shortName } from '../users.ts'
 import type { UserRow } from '../users.ts'
 import { amountFrom, badRequest, fail, idFrom, invalid, longText, text, wholeFrom } from '../validate.ts'
 
@@ -221,7 +221,9 @@ jobRoutes.post('/jobs', requireRole('client'), async (req, res) => {
       input.timing,
     ],
   )
-  res.status(201).json({ job: toJob((await loadJob(result.insertId))!, false) })
+  const job = (await loadJob(result.insertId))!
+  sendJobAlerts({ id: job.id, title: job.title, location: job.location, trade: job.trade })
+  res.status(201).json({ job: toJob(job, false) })
 })
 
 // Your jobs, newest first.
@@ -383,9 +385,11 @@ jobRoutes.put('/jobs/:id/quote', requireRole('builder'), async (req, res) => {
   // and only so many a day.
   const isNew = !existing || existing.status === 'withdrawn'
   const key = String(builder.id)
+  const newQuotes =
+    (await planOf(builder.id)) === 'pro' ? limits.newQuotesPerProBuilderPerDay : limits.newQuotesPerBuilderPerDay
   if (isNew) {
     if (!builder.email_verified_at) return fail(res, 409, (m) => m.quotes.confirmEmailFirst)
-    const wait = limits.newQuotesPerBuilderPerDay.retryAfter(key)
+    const wait = newQuotes.retryAfter(key)
     if (wait) return tooManyAttempts(res, wait)
   }
   await db.execute(
@@ -396,7 +400,7 @@ jobRoutes.put('/jobs/:id/quote', requireRole('builder'), async (req, res) => {
   publish(job.client_id, { type: 'job', jobId: job.id })
   const quote = (await myQuoteOn(job.id, builder.id))!
   if (isNew) {
-    limits.newQuotesPerBuilderPerDay.hit(key)
+    newQuotes.hit(key)
     notify(
       job.client_id,
       'quotes',

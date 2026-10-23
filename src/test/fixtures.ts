@@ -42,7 +42,8 @@ export function makeUser(overrides: Partial<User> = {}): User {
     role: 'client',
     phone: null,
     emailVerified: true,
-    notifications: { quotes: true, projects: true, messages: true },
+    notifications: { quotes: true, projects: true, messages: true, jobs: true },
+    plan: null,
     memberSince: MAY_1,
     builderProfile: null,
     ...overrides,
@@ -55,6 +56,7 @@ export function makeBuilderUser(overrides: Partial<User> = {}): User {
     email: 'marcus@example.com',
     name: 'Marcus Reid',
     role: 'builder',
+    plan: { name: 'free', endsAt: null, trialAvailable: true },
     builderProfile: makeProfile(),
     ...overrides,
   })
