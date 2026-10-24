@@ -2,6 +2,7 @@ import type { RowDataPacket } from 'mysql2/promise'
 import { app } from './app.ts'
 import { db } from './db.ts'
 import { emailIsSetUp } from './mailer.ts'
+import { startReminders } from './notifications.ts'
 
 // 3002, so Be in touch's API (3001) can run at the same time.
 const PORT = Number(process.env.PORT || 3002)
@@ -32,3 +33,6 @@ if (process.env.NODE_ENV === 'production') {
 app.listen(PORT, HOST, () => {
   console.log(`API listening on http://${HOST}:${PORT}`)
 })
+
+// Emails clients about invoices that become overdue.
+startReminders()

@@ -7,6 +7,7 @@ import { db, inTransaction } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
 import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
+import { notify } from '../notifications.ts'
 import { loadProject, moneyOf, otherSide, projectAs, projectFor } from '../projects.ts'
 import type { ProjectStatus, Side } from '../projects.ts'
 import { requireRole } from '../session.ts'
@@ -63,6 +64,12 @@ billingRoutes.post('/projects/:id/change-orders', requireRole('builder'), async 
     days,
   ])
   publish(project.client_id, { type: 'project', projectId: project.id })
+  notify(
+    project.client_id,
+    'projects',
+    (m) => m.changeOrder(project.business_name, title, project.title, amount, project.currency),
+    `/projects/${project.id}?tab=money`,
+  )
   res.status(201).json({ project: await view(project.id, 'builder') })
 })
 
@@ -83,6 +90,12 @@ for (const [action, status] of [
     const { item, project } = await itemAs(res, 'change_orders', req.params.id, 'client', ['active'])
     await decide(item.id, status)
     publish(otherSide(project, 'client'), { type: 'project', projectId: project.id })
+    notify(
+      project.builder_id,
+      'projects',
+      (m) => m.changeAnswered(item.title, project.title, status === 'approved'),
+      `/projects/${project.id}?tab=money`,
+    )
     res.json({ project: await view(project.id, 'client') })
   })
 }
@@ -106,7 +119,7 @@ billingRoutes.post('/projects/:id/invoices', requireRole('builder'), async (req,
   if (amount === null) return badRequest(res, (m) => m.invoices.enterAmount)
   if (!dueDate) return badRequest(res, (m) => m.invoices.chooseDueDate)
 
-  await inTransaction(async (conn) => {
+  const number = await inTransaction(async (conn) => {
     // Locks the project, so two invoices sent at once can't both use what's left.
     await conn.execute('SELECT id FROM projects WHERE id = ? FOR UPDATE', [project.id])
     const money = await moneyOf(project)
@@ -121,8 +134,18 @@ billingRoutes.post('/projects/:id/invoices', requireRole('builder'), async (req,
        SELECT ?, COALESCE(MAX(number), 0) + 1, ?, ?, ? FROM invoices WHERE project_id = ?`,
       [project.id, title, amount, dueDate, project.id],
     )
+    const [rows] = await conn.execute<RowDataPacket[]>('SELECT MAX(number) AS number FROM invoices WHERE project_id = ?', [
+      project.id,
+    ])
+    return rows[0].number as number
   })
   publish(project.client_id, { type: 'project', projectId: project.id })
+  notify(
+    project.client_id,
+    'projects',
+    (m) => m.invoice(project.business_name, number, project.title, amount, project.currency, dueDate),
+    `/projects/${project.id}?tab=money`,
+  )
   res.status(201).json({ project: await view(project.id, 'builder') })
 })
 

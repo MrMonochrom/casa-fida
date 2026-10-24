@@ -1,6 +1,6 @@
 // Everything the server says to people, in Romanian.
 import { pluralRo } from '../../shared/languages.ts'
-import { formatMoney } from '../../shared/money.ts'
+import { formatChange, formatMoney } from '../../shared/money.ts'
 import type { Currency } from '../../shared/money.ts'
 import {
   ABOUT_MAX,
@@ -22,6 +22,10 @@ import type { ServerMessages } from './en.ts'
 const n = (value: number) => value.toLocaleString('ro-RO')
 /** "8 caractere", "4000 de caractere" */
 const chars = (value: number) => `${n(value)} ${pluralRo(value, 'caracter', 'caractere', 'de caractere')}`
+
+/** A 'YYYY-MM-DD' date the way this language writes it. */
+const day = (date: string) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString('ro-RO', { timeZone: 'UTC', dateStyle: 'medium' })
 
 export const ro: ServerMessages = {
   general: {
@@ -49,6 +53,7 @@ export const ro: ServerMessages = {
     wrongPassword: 'Parola actuală este greșită.',
     passwordTooShort: `Parola trebuie să aibă cel puțin ${chars(PASSWORD_MIN)}.`,
     passwordTooLong: 'Parola este prea lungă.',
+    resetLinkGone: 'Acest link de resetare a parolei a expirat sau a fost deja folosit. Cereți unul nou.',
     verifyLinkGone: 'Acest link de confirmare a expirat sau a fost deja folosit. Conectați-vă pentru a primi unul nou.',
     alreadyConfirmed: 'Adresa dvs. de email este deja confirmată.',
   },
@@ -81,6 +86,7 @@ export const ro: ServerMessages = {
     currencyLocked: 'Moneda nu mai poate fi schimbată după ce constructorii au trimis oferte.',
   },
   quotes: {
+    confirmEmailFirst: 'Confirmați-vă adresa de email înainte de a trimite oferte. V-am trimis un link.',
     enterPrice: 'Introduceți prețul dvs.',
     weeksWhole: 'Durata lucrării trebuie să fie un număr întreg de săptămâni.',
     enterMessage: 'Spuneți ce include prețul.',
@@ -178,6 +184,54 @@ export const ro: ServerMessages = {
     subject: 'Confirmați-vă adresa de email pentru Casa Fida',
     intro: 'Deschideți acest link pentru a vă confirma adresa de email pentru Casa Fida:',
     ignore: 'Dacă nu v-ați înregistrat pe Casa Fida, puteți ignora acest email.',
+  },
+  passwordResetEmail: {
+    subject: 'Resetați parola Casa Fida',
+    intro:
+      'Cineva a cerut resetarea parolei contului dvs. Casa Fida. Deschideți acest link pentru a alege una nouă. Funcționează o oră:',
+    ignore: 'Dacă nu ați fost dvs., puteți ignora acest email: parola rămâne aceeași.',
+  },
+  notifications: {
+    open: 'Deschideți pe Casa Fida:',
+    settings: 'Alegeți ce emailuri primiți:',
+    newQuote: (business: string, job: string, cents: number, currency: Currency) => ({
+      subject: `Ofertă nouă pentru „${job}”`,
+      text: `${business} v-a trimis o ofertă de ${formatMoney(cents, currency, 'ro')} pentru „${job}”.`,
+    }),
+    quoteAccepted: (job: string) => ({
+      subject: `Oferta dvs. a fost acceptată: ${job}`,
+      text: `Clientul a acceptat oferta dvs. pentru „${job}”. Proiectul a început.`,
+    }),
+    proposalAnswered: (project: string, accepted: boolean) => ({
+      subject: accepted ? `Propunere acceptată: ${project}` : `Propunere refuzată: ${project}`,
+      text: accepted
+        ? `Clientul a acceptat propunerea dvs. pentru „${project}”. Proiectul a început.`
+        : `Clientul a refuzat propunerea dvs. pentru „${project}”.`,
+    }),
+    changeOrder: (business: string, change: string, project: string, cents: number, currency: Currency) => ({
+      subject: `Modificare de aprobat: ${change}`,
+      text: `${business} a trimis o modificare pentru „${project}”: „${change}”, ${formatChange(cents, currency, 'ro')}. Nimic nu se schimbă până nu o aprobați.`,
+    }),
+    changeAnswered: (change: string, project: string, approved: boolean) => ({
+      subject: approved ? `Modificare aprobată: ${change}` : `Modificare refuzată: ${change}`,
+      text: `Clientul a ${approved ? 'aprobat' : 'refuzat'} modificarea „${change}” pentru „${project}”.`,
+    }),
+    invoice: (business: string, number: number, project: string, cents: number, currency: Currency, due: string) => ({
+      subject: `Factura nr. ${number} de la ${business}`,
+      text: `${business} v-a trimis factura nr. ${number} pentru „${project}”: ${formatMoney(cents, currency, 'ro')}, scadentă pe ${day(due)}.`,
+    }),
+    invoiceOverdue: (business: string, number: number, project: string, cents: number, currency: Currency, due: string) => ({
+      subject: `Factura nr. ${number} este restantă`,
+      text: `Factura nr. ${number} de la ${business} pentru „${project}” (${formatMoney(cents, currency, 'ro')}) era scadentă pe ${day(due)}.`,
+    }),
+    projectCompleted: (business: string, project: string) => ({
+      subject: `„${project}” este finalizat`,
+      text: `${business} a marcat „${project}” ca finalizat. Cum a fost? Puteți lăsa o recenzie.`,
+    }),
+    message: (name: string) => ({
+      subject: `Mesaj nou de la ${name}`,
+      text: `${name} v-a trimis un mesaj pe Casa Fida.`,
+    }),
   },
   proposalEmail: {
     subject: (business: string) => `${business} v-a trimis o propunere de proiect`,

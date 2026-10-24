@@ -1,5 +1,5 @@
 // Everything the server says to people, in English. ro.ts and ru.ts have the same shape.
-import { formatMoney } from '../../shared/money.ts'
+import { formatChange, formatMoney } from '../../shared/money.ts'
 import type { Currency } from '../../shared/money.ts'
 import {
   ABOUT_MAX,
@@ -18,6 +18,10 @@ import {
 } from '../../shared/rules.ts'
 
 const n = (value: number) => value.toLocaleString('en-US')
+
+/** A 'YYYY-MM-DD' date the way this language writes it. */
+const day = (date: string) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', dateStyle: 'medium' })
 
 export const en = {
   general: {
@@ -45,6 +49,7 @@ export const en = {
     wrongPassword: 'Your current password is wrong.',
     passwordTooShort: `Your password needs at least ${PASSWORD_MIN} characters.`,
     passwordTooLong: 'Your password is too long.',
+    resetLinkGone: 'This password reset link has expired or was already used. Ask for a new one.',
     verifyLinkGone: 'This confirmation link has expired or was already used. Log in to get a new one.',
     alreadyConfirmed: 'Your email address is already confirmed.',
   },
@@ -77,6 +82,7 @@ export const en = {
     currencyLocked: "The currency can't change once builders have quoted.",
   },
   quotes: {
+    confirmEmailFirst: 'Confirm your email address before sending quotes. We sent you a link.',
     enterPrice: 'Enter your price.',
     weeksWhole: 'The length of the job should be a whole number of weeks.',
     enterMessage: "Say what's included in your price.",
@@ -172,6 +178,54 @@ export const en = {
     subject: 'Confirm your email address for Casa Fida',
     intro: 'Open this link to confirm your email address for Casa Fida:',
     ignore: "If you didn't sign up for Casa Fida, you can ignore this email.",
+  },
+  passwordResetEmail: {
+    subject: 'Reset your Casa Fida password',
+    intro:
+      'Someone asked to reset the password of your Casa Fida account. Open this link to choose a new one. It works for an hour:',
+    ignore: "If it wasn't you, you can ignore this email: your password stays the same.",
+  },
+  notifications: {
+    open: 'Open it on Casa Fida:',
+    settings: 'Choose which emails you get:',
+    newQuote: (business: string, job: string, cents: number, currency: Currency) => ({
+      subject: `New quote for ${job}`,
+      text: `${business} sent you a quote of ${formatMoney(cents, currency)} for “${job}”.`,
+    }),
+    quoteAccepted: (job: string) => ({
+      subject: `Your quote was accepted: ${job}`,
+      text: `The client accepted your quote for “${job}”. The project has started.`,
+    }),
+    proposalAnswered: (project: string, accepted: boolean) => ({
+      subject: accepted ? `Proposal accepted: ${project}` : `Proposal declined: ${project}`,
+      text: accepted
+        ? `Your client accepted your proposal for “${project}”. The project has started.`
+        : `Your client declined your proposal for “${project}”.`,
+    }),
+    changeOrder: (business: string, change: string, project: string, cents: number, currency: Currency) => ({
+      subject: `Change to approve: ${change}`,
+      text: `${business} sent a change order on “${project}”: “${change}”, ${formatChange(cents, currency)}. Nothing changes until you approve it.`,
+    }),
+    changeAnswered: (change: string, project: string, approved: boolean) => ({
+      subject: approved ? `Change approved: ${change}` : `Change declined: ${change}`,
+      text: `Your client ${approved ? 'approved' : 'declined'} the change “${change}” on “${project}”.`,
+    }),
+    invoice: (business: string, number: number, project: string, cents: number, currency: Currency, due: string) => ({
+      subject: `Invoice #${number} from ${business}`,
+      text: `${business} sent invoice #${number} for “${project}”: ${formatMoney(cents, currency)}, due ${day(due)}.`,
+    }),
+    invoiceOverdue: (business: string, number: number, project: string, cents: number, currency: Currency, due: string) => ({
+      subject: `Invoice #${number} is overdue`,
+      text: `Invoice #${number} from ${business} for “${project}” (${formatMoney(cents, currency)}) was due ${day(due)}.`,
+    }),
+    projectCompleted: (business: string, project: string) => ({
+      subject: `${project} is completed`,
+      text: `${business} marked “${project}” as completed. How did it go? You can leave a review.`,
+    }),
+    message: (name: string) => ({
+      subject: `New message from ${name}`,
+      text: `${name} sent you a message on Casa Fida.`,
+    }),
   },
   proposalEmail: {
     subject: (business: string) => `${business} sent you a project proposal`,

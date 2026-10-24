@@ -179,6 +179,13 @@ export const ro: Messages = {
     newHere: 'Nou pe Casa Fida? {link}',
     createAnAccount: 'Creează un cont',
     haveAccount: 'Aveți deja un cont? {link}',
+    forgot: 'Ați uitat parola?',
+    forgotTitle: 'Resetați parola',
+    forgotText: 'Introduceți adresa de email a contului și vă trimitem un link pentru a alege o parolă nouă.',
+    sendLink: 'Trimite linkul',
+    forgotSent: (email: string) =>
+      `Dacă există un cont cu ${email}, i-am trimis un link pentru a alege o parolă nouă. Funcționează o oră.`,
+    backToLogin: 'Înapoi la conectare',
     headline: 'Constructorii și clienții lor, pe aceeași pagină.',
     points: [
       {
@@ -230,12 +237,28 @@ export const ro: Messages = {
       `Contul cu care sunteți conectat (${email}) este de constructor. Propunerile sunt pentru conturi de client: deconectați-vă, apoi deschideți din nou linkul pentru a vă înregistra ca client.`,
     goToMyAccount: 'Mergi la contul meu',
   },
+  reset: {
+    title: 'Alegeți o parolă nouă',
+    text: 'Vă conectăm aici și închidem sesiunile de pe celelalte dispozitive.',
+    save: 'Salvează parola nouă',
+    askAgain: 'Cere un link nou',
+  },
+  emails: {
+    title: 'Notificări prin email',
+    hint: 'Emailuri despre ce se întâmplă cât timp lipsiți. În aplicație vedeți oricum totul.',
+    quotesClient: 'Oferte noi pentru lucrările dvs.',
+    quotesBuilder: 'Când un client vă acceptă oferta',
+    projectsClient: 'Propuneri, modificări, facturi și proiecte finalizate',
+    projectsBuilder: 'Răspunsuri la propunerile și modificările dvs.',
+    messages: 'Mesaje noi, când nu sunteți în aplicație',
+  },
   verify: {
     done: 'Adresa de email este confirmată',
     doneText: (email: string) => `${email} este confirmată. Mulțumim!`,
     bannerClient:
       'Confirmați-vă adresa de email pentru ca propunerile constructorilor să ajungă direct în contul dvs. Am trimis un link la {email}.',
-    bannerBuilder: 'Confirmați-vă adresa de email pentru a putea trimite propuneri. Am trimis un link la {email}.',
+    bannerBuilder:
+      'Confirmați-vă adresa de email pentru a putea trimite oferte și propuneri. Am trimis un link la {email}.',
     sendAgain: 'Retrimite',
     sent: 'Trimis. Verificați-vă emailul.',
   },

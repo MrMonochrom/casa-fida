@@ -4,6 +4,7 @@ import type {
   BuilderDetail,
   BuilderProfile,
   Conversation,
+  EmailSettings,
   InvitePreview,
   Job,
   JobInput,
@@ -42,6 +43,16 @@ export interface InvoiceInput {
   dueDate: string
 }
 
+/** An error answer from the server: its message is for the person, its status for the code. */
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
 let onUnauthorized: (() => void) | null = null
 
 /** Called when the server says the session is gone, for example after a password change elsewhere. */
@@ -69,7 +80,7 @@ async function request<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: strin
   if (res.status === 401 && path !== '/login') onUnauthorized?.()
   if (res.status === 204) return undefined as T
   const data = await res.json().catch(() => null)
-  if (!res.ok) throw new Error(data?.error ?? getT().common.offline)
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? getT().common.offline)
   return data as T
 }
 
@@ -95,6 +106,13 @@ export const api = {
   verifyEmail: (token: string) =>
     request<{ email: string }>('POST', '/verify-email', { token }).then((r) => r.email),
   resendVerification: () => request<void>('POST', '/me/verify-email', {}),
+  saveEmailSettings: (settings: EmailSettings) =>
+    request<{ user: User }>('PUT', '/me/notifications', settings).then((r) => r.user),
+  /** Emails a link to choose a new password, if an account uses the address. */
+  requestPasswordReset: (email: string) => request<void>('POST', '/password-reset', { email }),
+  /** Sets a new password with the token from that email, and logs in. */
+  resetPassword: (token: string, password: string) =>
+    request<{ user: User }>('POST', '/password-reset/confirm', { token, password }).then((r) => r.user),
   saveAccount: (name: string, phone: string) =>
     request<{ user: User }>('PUT', '/me', { name, phone }).then((r) => r.user),
   changePassword: (currentPassword: string, newPassword: string) =>

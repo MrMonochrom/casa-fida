@@ -10,6 +10,10 @@ export interface UserRow extends RowDataPacket {
   role: Role
   phone: string | null
   email_verified_at: string | null
+  language: string
+  email_quotes: number
+  email_projects: number
+  email_messages: number
   created_at: string
 }
 
@@ -67,9 +71,23 @@ export async function ownAccount(user: UserRow) {
     role: user.role,
     phone: user.phone,
     emailVerified: user.email_verified_at !== null,
+    notifications: {
+      quotes: Boolean(user.email_quotes),
+      projects: Boolean(user.email_projects),
+      messages: Boolean(user.email_messages),
+    },
     memberSince: Number(rows[0].created),
     builderProfile: user.role === 'builder' ? await builderProfileOf(user.id) : null,
   }
+}
+
+/** How someone is named to others: a builder by their business, a client by their name. */
+export async function displayName(userId: number): Promise<string> {
+  const [rows] = await db.execute<RowDataPacket[]>(
+    'SELECT COALESCE(b.business_name, u.name) AS name FROM users u LEFT JOIN builder_profiles b ON b.user_id = u.id WHERE u.id = ?',
+    [userId],
+  )
+  return (rows[0]?.name as string) ?? ''
 }
 
 /** First name and the initial of the last one: "Emma C." Shown to people you haven't worked with. */

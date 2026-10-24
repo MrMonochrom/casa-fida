@@ -19,9 +19,13 @@ export type Text = (m: ServerMessages) => string
 
 /** The language a request wants: the app's cookie, else the browser's Accept-Language, else English. */
 export function languageOf(req: Request): Language {
+  return chosenLanguage(req) ?? pickLanguage(acceptedLanguages(req.headers['accept-language']))
+}
+
+/** The language the app says it's showing, if the request says (the app's cookie). */
+export function chosenLanguage(req: Request): Language | null {
   const chosen = cookie(req, LANGUAGE_COOKIE)
-  if (isLanguage(chosen)) return chosen
-  return pickLanguage(acceptedLanguages(req.headers['accept-language']))
+  return isLanguage(chosen) ? chosen : null
 }
 
 /** Every message in one language. */

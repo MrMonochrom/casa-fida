@@ -147,6 +147,13 @@ export const en = {
     newHere: 'New to Casa Fida? {link}',
     createAnAccount: 'Create an account',
     haveAccount: 'Already have an account? {link}',
+    forgot: 'Forgot your password?',
+    forgotTitle: 'Reset your password',
+    forgotText: "Enter your account's email address and we'll send you a link to choose a new password.",
+    sendLink: 'Send link',
+    forgotSent: (email: string) =>
+      `If an account uses ${email}, we've sent it a link to choose a new password. It works for an hour.`,
+    backToLogin: 'Back to log in',
     headline: 'Builders and their clients, on the same page.',
     points: [
       { title: 'Find the right builder.', text: 'Post a job, compare quotes and read reviews from past clients.' },
@@ -192,12 +199,27 @@ export const en = {
       `You're logged in as a builder (${email}). Proposals are for client accounts: log out, then open the link again to sign up as a client.`,
     goToMyAccount: 'Go to my account',
   },
+  reset: {
+    title: 'Choose a new password',
+    text: "You'll be logged in here, and logged out everywhere else.",
+    save: 'Save new password',
+    askAgain: 'Ask for a new link',
+  },
+  emails: {
+    title: 'Email notifications',
+    hint: "Emails about what happens while you're away. Everything is in the app either way.",
+    quotesClient: 'New quotes on your jobs',
+    quotesBuilder: 'When a client accepts your quote',
+    projectsClient: 'Proposals, change orders, invoices and finished projects',
+    projectsBuilder: 'Answers to your proposals and change orders',
+    messages: "New messages, when you're not in the app",
+  },
   verify: {
     done: 'Email address confirmed',
     doneText: (email: string) => `${email} is confirmed. Thanks!`,
     bannerClient:
       'Confirm your email address so proposals from builders come straight into your account. We sent a link to {email}.',
-    bannerBuilder: 'Confirm your email address to send proposals. We sent a link to {email}.',
+    bannerBuilder: 'Confirm your email address to send quotes and proposals. We sent a link to {email}.',
     sendAgain: 'Send it again',
     sent: 'Sent. Check your inbox.',
   },

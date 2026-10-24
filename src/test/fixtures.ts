@@ -42,6 +42,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
     role: 'client',
     phone: null,
     emailVerified: true,
+    notifications: { quotes: true, projects: true, messages: true },
     memberSince: MAY_1,
     builderProfile: null,
     ...overrides,

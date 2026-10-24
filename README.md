@@ -23,6 +23,8 @@ If your database was made before currencies or email confirmation were added, br
 ```sh
 npm run db:shell < db/migrations/001-currencies.sql           # existing jobs and projects stay in US dollars
 npm run db:shell < db/migrations/002-email-verification.sql   # existing accounts count as confirmed
+npm run db:shell < db/migrations/003-password-reset-and-notifications.sql
+npm run db:shell < db/migrations/005-emailed-invite-links.sql
 ```
 
 Without `SMTP_URL`, emails (like the link that confirms a new account's email address) are printed in the terminal running `npm run dev`.
@@ -70,7 +72,9 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 - Works on phones and desktops, in light or dark mode.
 - **Prices in US dollars, euros, Moldovan lei, Romanian lei or Russian rubles.** A client picks the currency when posting a job, and a builder when sending a proposal. Quotes, the project, change orders and invoices then use it. The currency can't change once builders have quoted or the client has accepted.
 - **In English, Romanian or Russian.** The app starts in the browser's language and can be switched from the menu at the top of every page. Error messages and proposal emails come from the server in the same language.
-- **Confirmed email addresses.** Signing up emails a link to confirm the address; a banner asks until it's done. Builders need it to send proposals, and proposals only go straight into accounts that have it.
+- **Confirmed email addresses.** Signing up emails a link to confirm the address; a banner asks until it's done. Opening the invite in a proposal email confirms it too, so clients who join that way get emails straight away. Builders need it to send quotes and proposals, and proposals only go straight into accounts that have it.
+- **Forgot your password?** The login page emails a link (it works for an hour) to choose a new one, which logs out every other browser.
+- **Email notifications** in each person's language: new quotes, accepted quotes, answers to proposals, change orders and their answers, invoices, overdue invoices (checked every hour), finished projects, and new messages while you're away (once until you've read them, without the message itself). Each kind can be turned off under Account; only confirmed addresses get them.
 
 ## Scripts
 
@@ -130,7 +134,7 @@ Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx
 ## Tests
 
 ```sh
-npm test                 # all 480 tests
+npm test                 # all 512 tests
 npx vitest run --project web
 npx vitest run server/routes/billing.api.test.ts
 ```
@@ -142,6 +146,8 @@ npx vitest run server/routes/billing.api.test.ts
 | **api** | Every endpoint against a real MySQL: validation messages, who may see and change what, prices and invoice totals, photo limits, messaging privacy and live events. | `server/**/*.api.test.ts` |
 
 The **api** tests need MySQL running (`npm run db:start`). They never touch your data: each run creates a separate `casa_fida_test` database and deletes it afterwards.
+
+On GitHub, every pull request (and every change to `main`) runs lint, the type check and build, and all the tests against a fresh MySQL: see [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ## Running in production
 
@@ -161,8 +167,7 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 | Not done yet | Today |
 |---|---|
 | Paying in the app | Clients pay the way they agree with their builder, who marks each invoice paid. |
-| Email notifications | Only proposal invites and email confirmation links are emailed. Everything else shows in the app and its menu counts. |
-| Password reset | Not built. |
+| Email digests | Each notification is its own email; there's no daily summary. |
 | Files such as plans and contracts | Only photos, on project updates. |
 | Running several server processes | Live updates and login limits are kept in one process's memory. |
 | Photo storage | Photos are stored in MySQL. A hosted app would keep them in file storage instead. |

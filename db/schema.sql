@@ -14,11 +14,21 @@ CREATE TABLE users (
   name VARCHAR(100) NOT NULL,
   role ENUM('client', 'builder') NOT NULL,
   phone VARCHAR(40) NULL,
-  -- Set once the person opens the link in the confirmation email.
+  -- Set once the person opens a link emailed to them: to confirm, to reset the password, or the
+  -- invite in a proposal email (see projects.invite_emailed).
   email_verified_at TIMESTAMP NULL,
   -- SHA-256 of the token in the newest confirmation link, while it can still be used.
   verify_token_hash CHAR(64) NULL UNIQUE,
   verify_expires_at TIMESTAMP NULL,
+  -- SHA-256 of the token in the newest password reset link, while it can still be used.
+  reset_token_hash CHAR(64) NULL UNIQUE,
+  reset_expires_at TIMESTAMP NULL,
+  -- The language the person uses the app in, for emails sent to them. The keys are in shared/languages.ts.
+  language CHAR(2) NOT NULL DEFAULT 'en',
+  -- Which emails they want about things that happen while they're away.
+  email_quotes BOOLEAN NOT NULL DEFAULT TRUE,
+  email_projects BOOLEAN NOT NULL DEFAULT TRUE,
+  email_messages BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login_at TIMESTAMP NULL
 );
@@ -114,6 +124,9 @@ CREATE TABLE projects (
   job_id INT UNSIGNED NULL UNIQUE,
   -- SHA-256 of the token in the invite link, while it can still be used.
   invite_token_hash CHAR(64) NULL UNIQUE,
+  -- Whether that link was only in the proposal email: the builder never saw it. Opening it then
+  -- shows the person can read client_email, so it confirms that address.
+  invite_emailed BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   accepted_at TIMESTAMP NULL,
   completed_at TIMESTAMP NULL,
@@ -190,6 +203,8 @@ CREATE TABLE invoices (
   status ENUM('due', 'paid', 'void') NOT NULL DEFAULT 'due',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   paid_at TIMESTAMP NULL,
+  -- When the client was emailed that it's overdue, so it happens once.
+  overdue_reminded_at TIMESTAMP NULL,
   UNIQUE (project_id, number),
   FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
 );

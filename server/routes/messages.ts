@@ -5,7 +5,9 @@ import { builderKnowsClient, ensureConversation } from '../conversations.ts'
 import { db, ms } from '../db.ts'
 import { notFound } from '../errors.ts'
 import type { Text } from '../i18n/index.ts'
-import { publish } from '../events.ts'
+import { isOnline, publish } from '../events.ts'
+import { notify } from '../notifications.ts'
+import { displayName } from '../users.ts'
 import { me, requireUser } from '../session.ts'
 import type { UserRow } from '../users.ts'
 import { badRequest, fail, idFrom, longText } from '../validate.ts'
@@ -144,6 +146,11 @@ messageRoutes.post('/conversations/:id/messages', requireUser, async (req, res) 
   if (!body) return badRequest(res, (m) => m.messages.enterText)
   if (body.length > MESSAGE_MAX) return badRequest(res, (m) => m.messages.tooLong)
   const conversation = await conversationFor(user, req.params.id)
+  // Whether they already have unread messages from you here: then they've been told once already.
+  const [waiting] = await db.execute<RowDataPacket[]>(
+    'SELECT 1 FROM messages WHERE conversation_id = ? AND sender_id = ? AND read_at IS NULL LIMIT 1',
+    [conversation.id, user.id],
+  )
 
   const [result] = await db.execute<ResultSetHeader>(
     'INSERT INTO messages (conversation_id, sender_id, body) VALUES (?, ?, ?)',
@@ -151,5 +158,11 @@ messageRoutes.post('/conversations/:id/messages', requireUser, async (req, res) 
   )
   const [rows] = await db.execute<MessageRow[]>(`SELECT ${MESSAGE_COLUMNS} FROM messages WHERE id = ?`, [result.insertId])
   publish(conversation.other.id, { type: 'message', conversationId: conversation.id })
+  // An email for the first message they haven't read, if they're away and you've confirmed your
+  // address. Not the message itself: it's read in the app.
+  if (waiting.length === 0 && !isOnline(conversation.other.id) && user.email_verified_at) {
+    const name = await displayName(user.id)
+    notify(conversation.other.id, 'messages', (m) => m.message(name), `/messages/${conversation.id}`)
+  }
   res.status(201).json({ message: toMessage(rows[0], user.id) })
 })

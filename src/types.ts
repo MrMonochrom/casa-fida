@@ -15,6 +15,12 @@ export interface BuilderProfile {
   trades: Trade[]
 }
 
+export interface EmailSettings {
+  quotes: boolean
+  projects: boolean
+  messages: boolean
+}
+
 /** The logged-in person. */
 export interface User {
   id: number
@@ -22,8 +28,10 @@ export interface User {
   name: string
   role: Role
   phone: string | null
-  /** Whether they've opened the link in the confirmation email. */
+  /** Whether they've opened a link emailed to them: to confirm, reset the password, or a proposal's invite. */
   emailVerified: boolean
+  /** Which emails they get about things that happen while they're away. */
+  notifications: EmailSettings
   memberSince: number
   /** Builders only, once they've set up their business profile. */
   builderProfile: BuilderProfile | null

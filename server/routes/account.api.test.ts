@@ -21,6 +21,7 @@ describe('POST /api/signup', () => {
       role: 'client',
       phone: null,
       emailVerified: false,
+      notifications: { quotes: true, projects: true, messages: true },
       memberSince: expect.any(Number),
       builderProfile: null,
     })
