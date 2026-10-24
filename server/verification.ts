@@ -1,12 +1,14 @@
 // Confirming that people own the email address they signed up with. Until they do, proposals sent
-// to that address don't go straight into their account, and builders can't send proposals.
-import type { RowDataPacket } from 'mysql2/promise'
+// to that address don't go straight into their account, builders can't send proposals, and a
+// client's jobs aren't emailed to builders.
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import type { Language } from '../shared/languages.ts'
 import { hashToken, newSessionToken } from './auth.ts'
 import { db } from './db.ts'
 import { publish } from './events.ts'
 import { messagesIn } from './i18n/index.ts'
 import { appUrl, sendEmail } from './mailer.ts'
+import { sendJobAlerts } from './notifications.ts'
 import type { UserRow } from './users.ts'
 
 /** How long a confirmation link works. */
@@ -47,8 +49,19 @@ export async function userForVerifyToken(token: string): Promise<UserRow | null>
  * Proposals sent to the address in the meantime go into their account, as they would have straight away.
  */
 export async function confirmEmail(user: Pick<UserRow, 'id' | 'email' | 'role'>) {
-  await db.execute('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ?', [user.id])
+  const [confirmed] = await db.execute<ResultSetHeader>(
+    'UPDATE users SET email_verified_at = NOW() WHERE id = ? AND email_verified_at IS NULL',
+    [user.id],
+  )
   if (user.role !== 'client') return
+  // Jobs they posted before confirming weren't sent to builders on Pro yet.
+  if (confirmed.affectedRows > 0) {
+    const [jobs] = await db.execute<RowDataPacket[]>(
+      "SELECT id, title, location, trade FROM jobs WHERE client_id = ? AND status = 'open'",
+      [user.id],
+    )
+    for (const job of jobs) sendJobAlerts(job as { id: number; title: string; location: string; trade: string })
+  }
   const [waiting] = await db.execute<RowDataPacket[]>(
     "SELECT id, builder_id FROM projects WHERE client_email = ? AND client_id IS NULL AND status = 'proposed'",
     [user.email],

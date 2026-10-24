@@ -4,14 +4,14 @@ import {
   ABOUT_MAX,
   BUSINESS_NAME_MAX,
   HEADLINE_MAX,
-  MAX_TRADES,
   PLACE_MAX,
   isTrade,
 } from '../../shared/rules.ts'
 import type { Trade } from '../../shared/rules.ts'
+import { PLAN_LIMITS } from '../../shared/plans.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { me, requireRole, requireUser } from '../session.ts'
-import { loadUser, ownAccount, shortName, tradesFrom } from '../users.ts'
+import { loadUser, ownAccount, planOf, shortName, tradeCovered, tradesFrom } from '../users.ts'
 import { badRequest, fail, idFrom, invalid, longText, text, wholeFrom } from '../validate.ts'
 
 export const builderRoutes = express.Router()
@@ -20,7 +20,8 @@ const LICENSE_MAX = 60
 const SEARCH_MAX = 100
 const RESULTS_MAX = 100
 
-function readProfile(body: Record<string, unknown>) {
+/** A profile from the request. `maxTrades` depends on the builder's plan. */
+function readProfile(body: Record<string, unknown>, maxTrades: number) {
   const businessName = text(body.businessName)
   const headline = text(body.headline)
   const about = longText(body.about)
@@ -33,8 +34,8 @@ function readProfile(body: Record<string, unknown>) {
   if (!about) return invalid((m) => m.builders.enterAbout)
   if (about.length > ABOUT_MAX) return invalid((m) => m.builders.aboutTooLong)
   if (!serviceArea || serviceArea.length > PLACE_MAX) return invalid((m) => m.builders.enterArea)
-  if (trades.length === 0 || trades.length > MAX_TRADES || !trades.every(isTrade)) {
-    return invalid((m) => m.builders.chooseTrades)
+  if (trades.length === 0 || trades.length > maxTrades || !trades.every(isTrade)) {
+    return invalid((m) => m.builders.chooseTrades(maxTrades))
   }
   let yearsInBusiness: number | null = null
   if (body.yearsInBusiness !== null && body.yearsInBusiness !== undefined && body.yearsInBusiness !== '') {
@@ -57,9 +58,9 @@ function readProfile(body: Record<string, unknown>) {
 
 // Creates or replaces your business profile. You appear in search once you have one.
 builderRoutes.put('/me/builder-profile', requireRole('builder'), async (req, res) => {
-  const input = readProfile(req.body ?? {})
-  if ('error' in input) return badRequest(res, input.error)
   const userId = me(res).id
+  const input = readProfile(req.body ?? {}, PLAN_LIMITS[await planOf(userId)].trades)
+  if ('error' in input) return badRequest(res, input.error)
 
   await inTransaction(async (conn) => {
     await conn.execute(
@@ -81,8 +82,9 @@ builderRoutes.put('/me/builder-profile', requireRole('builder'), async (req, res
       ],
     )
     await conn.execute('DELETE FROM builder_trades WHERE user_id = ?', [userId])
-    for (const trade of input.trades) {
-      await conn.execute('INSERT INTO builder_trades (user_id, trade) VALUES (?, ?)', [userId, trade])
+    // In the order chosen: if Pro ends, the first ones are those that still count.
+    for (const [position, trade] of input.trades.entries()) {
+      await conn.execute('INSERT INTO builder_trades (user_id, trade, position) VALUES (?, ?, ?)', [userId, trade, position])
     }
   })
   res.json({ user: await ownAccount((await loadUser(userId))!) })
@@ -108,7 +110,8 @@ interface CardRow extends RowDataPacket {
 const CARD_SELECT = `
   SELECT u.id, u.name, ${ms('u.created_at')} AS member_since,
          b.business_name, b.headline, b.about, b.service_area, b.years_in_business, b.license_number, b.insured,
-         (SELECT GROUP_CONCAT(t.trade ORDER BY t.trade) FROM builder_trades t WHERE t.user_id = u.id) AS trades,
+         (SELECT GROUP_CONCAT(t.trade ORDER BY t.trade) FROM builder_trades t
+          WHERE t.user_id = u.id AND ${tradeCovered()}) AS trades,
          (SELECT AVG(r.rating) FROM reviews r WHERE r.builder_id = u.id) AS rating,
          (SELECT COUNT(*) FROM reviews r WHERE r.builder_id = u.id) AS review_count,
          (SELECT COUNT(*) FROM projects p WHERE p.builder_id = u.id AND p.status = 'completed') AS completed_projects
@@ -146,7 +149,7 @@ builderRoutes.get('/builders', requireUser, async (req, res) => {
   const where: string[] = []
   const params: string[] = []
   if (trade) {
-    where.push('EXISTS (SELECT 1 FROM builder_trades t WHERE t.user_id = u.id AND t.trade = ?)')
+    where.push(`EXISTS (SELECT 1 FROM builder_trades t WHERE t.user_id = u.id AND t.trade = ? AND ${tradeCovered()})`)
     params.push(trade)
   }
   if (q) {

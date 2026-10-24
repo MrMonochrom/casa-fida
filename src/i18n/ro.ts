@@ -226,6 +226,8 @@ export const ro: Messages = {
     insured: 'Avem asigurare de răspundere civilă',
     trades: 'Domeniile în care lucrați',
     upTo: (n: number) => `(cel mult ${n})`,
+    overLimit: (max: number, paused: string) =>
+      `Planul dvs. include ${max} domenii, așa că acestea nu contează deocamdată: ${paused}. Eliminați domenii până rămân ${max} ca să puteți salva.`,
   },
   invite: {
     broken: 'Acest link nu mai funcționează',
@@ -243,6 +245,22 @@ export const ro: Messages = {
     save: 'Salvează parola nouă',
     askAgain: 'Cere un link nou',
   },
+  plan: {
+    title: 'Planul dvs.',
+    free: 'Gratuit',
+    pro: 'Pro',
+    onFree: 'Folosiți planul gratuit.',
+    proUntil: (date: string) => `Aveți Pro până pe ${date}.`,
+    proNoEnd: 'Aveți Pro.',
+    jobAlerts: 'Emailuri despre lucrări noi în domeniile dvs.',
+    daily: 'O dată pe zi',
+    instant: 'Imediat ce sunt publicate',
+    quotesPerDay: 'Oferte noi pe zi',
+    trades: 'Domenii pe care le puteți oferi',
+    startTrial: (days: number) => `Încercați Pro gratuit ${count(days, 'zi', 'zile', 'de zile')}`,
+    trialNote: 'Fără plată. La final, reveniți la planul gratuit.',
+    paidSoon: 'Plata pentru Pro va fi disponibilă după ce configurăm plățile online.',
+  },
   emails: {
     title: 'Notificări prin email',
     hint: 'Emailuri despre ce se întâmplă cât timp lipsiți. În aplicație vedeți oricum totul.',
@@ -250,6 +268,8 @@ export const ro: Messages = {
     quotesBuilder: 'Când un client vă acceptă oferta',
     projectsClient: 'Propuneri, modificări, facturi și proiecte finalizate',
     projectsBuilder: 'Răspunsuri la propunerile și modificările dvs.',
+    jobsDaily: 'Lucrări noi în domeniile dvs., o dată pe zi',
+    jobsInstant: 'Lucrări noi în domeniile dvs., imediat ce sunt publicate',
     messages: 'Mesaje noi, când nu sunteți în aplicație',
   },
   verify: {

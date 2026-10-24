@@ -188,6 +188,8 @@ export const en = {
     insured: 'We carry liability insurance',
     trades: 'Trades you offer',
     upTo: (n: number) => `(up to ${n})`,
+    overLimit: (max: number, paused: string) =>
+      `Your plan covers ${max} trades, so these don't count for now: ${paused}. Remove trades until you have ${max} to save.`,
   },
   invite: {
     broken: "This link doesn't work any more",
@@ -205,6 +207,22 @@ export const en = {
     save: 'Save new password',
     askAgain: 'Ask for a new link',
   },
+  plan: {
+    title: 'Your plan',
+    free: 'Free',
+    pro: 'Pro',
+    onFree: "You're on the free plan.",
+    proUntil: (date: string) => `You're on Pro until ${date}.`,
+    proNoEnd: "You're on Pro.",
+    jobAlerts: 'Emails about new jobs in your trades',
+    daily: 'Once a day',
+    instant: 'As each is posted',
+    quotesPerDay: 'New quotes a day',
+    trades: 'Trades you can offer',
+    startTrial: (days: number) => `Try Pro free for ${days} days`,
+    trialNote: 'No payment needed. When it ends, you go back to the free plan.',
+    paidSoon: 'Paying for Pro opens once online payments are set up.',
+  },
   emails: {
     title: 'Email notifications',
     hint: "Emails about what happens while you're away. Everything is in the app either way.",
@@ -212,6 +230,8 @@ export const en = {
     quotesBuilder: 'When a client accepts your quote',
     projectsClient: 'Proposals, change orders, invoices and finished projects',
     projectsBuilder: 'Answers to your proposals and change orders',
+    jobsDaily: 'New jobs in your trades, once a day',
+    jobsInstant: 'New jobs in your trades, as each is posted',
     messages: "New messages, when you're not in the app",
   },
   verify: {

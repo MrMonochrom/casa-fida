@@ -75,9 +75,9 @@ describe('email settings', () => {
     expect(screen.getByLabelText('New quotes on your jobs')).toBeChecked()
     await userEvent.click(screen.getByLabelText("New messages, when you're not in the app"))
     await userEvent.click(emailSettingsSaveButton())
-    expect(api.saveEmailSettings).toHaveBeenCalledWith({ quotes: true, projects: true, messages: false })
+    expect(api.saveEmailSettings).toHaveBeenCalledWith({ quotes: true, projects: true, messages: false, jobs: true })
     expect(session.onUserChange).toHaveBeenCalledWith(
-      expect.objectContaining({ notifications: { quotes: true, projects: true, messages: false } }),
+      expect.objectContaining({ notifications: { quotes: true, projects: true, messages: false, jobs: true } }),
     )
   })
 

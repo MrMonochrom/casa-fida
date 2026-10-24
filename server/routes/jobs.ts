@@ -12,15 +12,16 @@ import {
 } from '../../shared/rules.ts'
 import { DEFAULT_CURRENCY, isCurrency } from '../../shared/money.ts'
 import type { Currency } from '../../shared/money.ts'
+import { PLAN_LIMITS } from '../../shared/plans.ts'
 import { ensureConversation } from '../conversations.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
 import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
-import { notify } from '../notifications.ts'
+import { notify, sendJobAlerts } from '../notifications.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { me, requireRole, requireUser } from '../session.ts'
-import { shortName } from '../users.ts'
+import { planOf, shortName, tradeCovered } from '../users.ts'
 import type { UserRow } from '../users.ts'
 import { amountFrom, badRequest, fail, idFrom, invalid, longText, text, wholeFrom } from '../validate.ts'
 
@@ -203,14 +204,20 @@ async function quotingBuilders(jobId: number): Promise<number[]> {
 
 // ---------- Clients: posting and managing jobs ----------
 
+// Posts a job. Builders on Pro in its trade hear about it straight away, but only from clients who
+// have confirmed their address (otherwise once they do), and a client can post only so many a day.
 jobRoutes.post('/jobs', requireRole('client'), async (req, res) => {
+  const client = me(res)
   const input = readJob(req.body ?? {})
   if ('error' in input) return badRequest(res, input.error)
+  const key = String(client.id)
+  const wait = limits.jobsPerClientPerDay.retryAfter(key)
+  if (wait) return tooManyAttempts(res, wait)
   const [result] = await db.execute<ResultSetHeader>(
     `INSERT INTO jobs (client_id, title, description, trade, location, currency, budget_min, budget_max, timing)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      me(res).id,
+      client.id,
       input.title,
       input.description,
       input.trade,
@@ -221,7 +228,10 @@ jobRoutes.post('/jobs', requireRole('client'), async (req, res) => {
       input.timing,
     ],
   )
-  res.status(201).json({ job: toJob((await loadJob(result.insertId))!, false) })
+  limits.jobsPerClientPerDay.hit(key)
+  const job = (await loadJob(result.insertId))!
+  if (client.email_verified_at) sendJobAlerts(job)
+  res.status(201).json({ job: toJob(job, false) })
 })
 
 // Your jobs, newest first.
@@ -291,7 +301,8 @@ jobRoutes.get('/jobs', requireRole('builder'), async (req, res) => {
   let filter = ''
   const params: (string | number)[] = []
   if (trade === 'mine') {
-    filter = 'AND j.trade IN (SELECT trade FROM builder_trades WHERE user_id = ?)'
+    filter = `AND j.trade IN (SELECT t.trade FROM builder_trades t JOIN users b ON b.id = t.user_id
+                              WHERE t.user_id = ? AND ${tradeCovered('t.', 'b.')})`
     params.push(builderId)
   } else if (trade) {
     if (!isTrade(trade)) return badRequest(res, (m) => m.builders.unknownTrade)
@@ -385,7 +396,8 @@ jobRoutes.put('/jobs/:id/quote', requireRole('builder'), async (req, res) => {
   const key = String(builder.id)
   if (isNew) {
     if (!builder.email_verified_at) return fail(res, 409, (m) => m.quotes.confirmEmailFirst)
-    const wait = limits.newQuotesPerBuilderPerDay.retryAfter(key)
+    const max = PLAN_LIMITS[await planOf(builder.id)].newQuotesPerDay
+    const wait = limits.newQuotesPerBuilderPerDay.retryAfter(key, max)
     if (wait) return tooManyAttempts(res, wait)
   }
   await db.execute(

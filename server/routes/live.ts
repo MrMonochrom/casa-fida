@@ -4,6 +4,7 @@ import { hashToken } from '../auth.ts'
 import { db } from '../db.ts'
 import { MAX_STREAMS_PER_USER, streamCount, subscribe } from '../events.ts'
 import { currentUser, me, requireUser, sessionToken } from '../session.ts'
+import { tradeCovered } from '../users.ts'
 import { fail } from '../validate.ts'
 
 export const liveRoutes = express.Router()
@@ -69,7 +70,9 @@ liveRoutes.get('/summary', requireUser, async (_req, res) => {
             WHERE c.${column} = ? AND m.sender_id <> ? AND m.read_at IS NULL) AS unread_messages,
            0 AS projects,
            (SELECT COUNT(*) FROM jobs j
-            WHERE j.status = 'open' AND j.trade IN (SELECT trade FROM builder_trades WHERE user_id = ?)
+            WHERE j.status = 'open'
+              AND j.trade IN (SELECT t.trade FROM builder_trades t JOIN users b ON b.id = t.user_id
+                              WHERE t.user_id = ? AND ${tradeCovered('t.', 'b.')})
               AND NOT EXISTS (SELECT 1 FROM quotes q WHERE q.job_id = j.id AND q.builder_id = ?)) AS jobs`,
     user.role === 'client' ? Array(6).fill(user.id) : Array(4).fill(user.id),
   )

@@ -29,6 +29,16 @@ CREATE TABLE users (
   email_quotes BOOLEAN NOT NULL DEFAULT TRUE,
   email_projects BOOLEAN NOT NULL DEFAULT TRUE,
   email_messages BOOLEAN NOT NULL DEFAULT TRUE,
+  email_jobs BOOLEAN NOT NULL DEFAULT TRUE,
+  -- Builders' plan, from shared/plans.ts. Pro lasts until plan_ends_at (no end when it's empty).
+  plan ENUM('free', 'pro') NOT NULL DEFAULT 'free',
+  plan_ends_at TIMESTAMP NULL,
+  -- When they started their one free trial of Pro.
+  trial_used_at TIMESTAMP NULL,
+  -- When a builder on the free plan last got the daily email of new jobs in their trades, and the
+  -- newest job it told them about (the next one starts after it).
+  jobs_digest_sent_at TIMESTAMP NULL,
+  jobs_digest_last_job_id INT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_login_at TIMESTAMP NULL
 );
@@ -61,6 +71,8 @@ CREATE TABLE builder_profiles (
 CREATE TABLE builder_trades (
   user_id INT UNSIGNED NOT NULL,
   trade VARCHAR(40) NOT NULL,
+  -- The order the builder chose it in, from 0. Their plan covers the first ones, up to its limit.
+  position TINYINT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, trade),
   INDEX (trade),
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE

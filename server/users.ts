@@ -1,4 +1,6 @@
 import type { RowDataPacket } from 'mysql2/promise'
+import { PLAN_LIMITS } from '../shared/plans.ts'
+import type { Plan } from '../shared/plans.ts'
 import type { Role, Trade } from '../shared/rules.ts'
 import { db, ms } from './db.ts'
 
@@ -13,6 +15,10 @@ export interface UserRow extends RowDataPacket {
   language: string
   email_quotes: number
   email_projects: number
+  email_jobs: number
+  plan: Plan
+  plan_ends_at: string | null
+  trial_used_at: string | null
   email_messages: number
   created_at: string
 }
@@ -38,10 +44,13 @@ export function tradesFrom(value: string | null): Trade[] {
   return value ? (value.split(',') as Trade[]) : []
 }
 
-/** A builder's business profile, or null if they haven't set one up yet. */
+/**
+ * A builder's business profile, or null if they haven't set one up yet. Every trade they chose, in
+ * the order they chose them, even ones their plan doesn't cover now (see tradeCovered).
+ */
 export async function builderProfileOf(userId: number): Promise<BuilderProfile | null> {
   const [rows] = await db.execute<RowDataPacket[]>(
-    `SELECT b.*, (SELECT GROUP_CONCAT(trade ORDER BY trade) FROM builder_trades WHERE user_id = b.user_id) AS trades
+    `SELECT b.*, (SELECT GROUP_CONCAT(trade ORDER BY position, trade) FROM builder_trades WHERE user_id = b.user_id) AS trades
      FROM builder_profiles b WHERE b.user_id = ?`,
     [userId],
   )
@@ -59,11 +68,35 @@ export async function builderProfileOf(userId: number): Promise<BuilderProfile |
   }
 }
 
+/**
+ * SQL that's true while a builder is on Pro: their plan says so and its time hasn't run out. The
+ * database's clock decides, so the server's time zone can't shift when Pro ends.
+ */
+export const isPro = (table = '') =>
+  `(${table}plan = 'pro' AND (${table}plan_ends_at IS NULL OR ${table}plan_ends_at > NOW()))`
+
+/**
+ * SQL that's true for a builder's trade (in builder_trades `trades`, for the builder in users `user`)
+ * while their plan covers it: the first ones they chose, up to the plan's limit. When Pro ends, the
+ * rest stay in their profile but don't count (in search, job lists and job emails) until they choose
+ * which to keep.
+ */
+export const tradeCovered = (trades = 't.', user = 'u.') =>
+  `${trades}position < IF(${isPro(user)}, ${PLAN_LIMITS.pro.trades}, ${PLAN_LIMITS.free.trades})`
+
+/** The plan a builder is on right now. */
+export async function planOf(userId: number): Promise<Plan> {
+  const [rows] = await db.execute<RowDataPacket[]>(`SELECT ${isPro()} AS pro FROM users WHERE id = ?`, [userId])
+  return rows[0]?.pro ? 'pro' : 'free'
+}
+
 /** Everything the logged-in person may see about their own account (never the password hash). */
 export async function ownAccount(user: UserRow) {
-  const [rows] = await db.execute<RowDataPacket[]>(`SELECT ${ms('created_at')} AS created FROM users WHERE id = ?`, [
-    user.id,
-  ])
+  const [rows] = await db.execute<RowDataPacket[]>(
+    `SELECT ${ms('created_at')} AS created, ${ms('plan_ends_at')} AS plan_ends, ${isPro()} AS pro FROM users WHERE id = ?`,
+    [user.id],
+  )
+  const pro = Boolean(rows[0].pro)
   return {
     id: user.id,
     email: user.email,
@@ -75,7 +108,17 @@ export async function ownAccount(user: UserRow) {
       quotes: Boolean(user.email_quotes),
       projects: Boolean(user.email_projects),
       messages: Boolean(user.email_messages),
+      jobs: Boolean(user.email_jobs),
     },
+    // Builders only. endsAt is when Pro runs out (null: no end, or on the free plan).
+    plan:
+      user.role === 'builder'
+        ? {
+            name: pro ? 'pro' : 'free',
+            endsAt: pro && rows[0].plan_ends !== null ? Number(rows[0].plan_ends) : null,
+            trialAvailable: user.trial_used_at === null,
+          }
+        : null,
     memberSince: Number(rows[0].created),
     builderProfile: user.role === 'builder' ? await builderProfileOf(user.id) : null,
   }

@@ -28,7 +28,7 @@ export type Trade = keyof typeof TRADES
 export const TRADE_KEYS = Object.keys(TRADES) as Trade[]
 // Object.hasOwn rather than `in`, so names every object has, like "constructor", don't count.
 export const isTrade = (value: unknown): value is Trade => typeof value === 'string' && Object.hasOwn(TRADES, value)
-export const MAX_TRADES = 6
+// How many trades a builder can offer depends on their plan: see shared/plans.ts.
 
 /** When a client wants a job to start. */
 export const JOB_TIMINGS = {

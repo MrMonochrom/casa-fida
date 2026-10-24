@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { ABOUT_MAX, BUSINESS_NAME_MAX, HEADLINE_MAX, PLACE_MAX } from '../../shared/rules'
 import type { Trade } from '../../shared/rules'
+import { PLAN_LIMITS } from '../../shared/plans'
 import { api } from '../api'
 import { useT } from '../i18n'
 import type { User } from '../types'
@@ -105,7 +106,7 @@ export function BuilderProfileForm({ user, onSaved, submitLabel }: Props) {
           inputMode="numeric"
         />
       </div>
-      <TradePicker value={trades} onChange={setTrades} />
+      <TradePicker value={trades} onChange={setTrades} max={PLAN_LIMITS[user.plan?.name ?? 'free'].trades} />
       <div className="form-row">
         <TextField
           label={t.profileForm.license}

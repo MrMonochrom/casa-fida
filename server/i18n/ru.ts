@@ -7,7 +7,6 @@ import {
   CHANGE_DAYS_MAX,
   DESCRIPTION_MAX,
   HEADLINE_MAX,
-  MAX_TRADES,
   MESSAGE_MAX,
   PASSWORD_MIN,
   PHOTOS_PER_UPDATE,
@@ -61,7 +60,7 @@ export const ru: ServerMessages = {
     enterAbout: 'Расскажите клиентам немного о своей компании.',
     aboutTooLong: `Раздел «О компании» должен быть короче ${n(ABOUT_MAX)} символов.`,
     enterArea: 'Пожалуйста, укажите, где вы работаете.',
-    chooseTrades: `Выберите от 1 до ${MAX_TRADES} видов работ.`,
+    chooseTrades: (max: number) => `Выберите от 1 до ${max} видов работ.`,
     yearsWhole: 'Количество лет работы должно быть целым числом.',
     licenseTooLong: 'Номер лицензии слишком длинный.',
     unknownTrade: 'Неизвестный вид работ.',
@@ -82,6 +81,10 @@ export const ru: ServerMessages = {
     alreadyClosed: 'Этот заказ уже закрыт.',
     alreadyTaken: 'Этот заказ уже закрыт или передан строителю.',
     currencyLocked: 'Валюту нельзя изменить, когда строители уже прислали сметы.',
+  },
+  plans: {
+    trialUsed: 'Вы уже использовали бесплатный пробный период Pro.',
+    alreadyPro: 'У вас уже есть Pro.',
   },
   quotes: {
     confirmEmailFirst: 'Подтвердите свою почту, прежде чем отправлять сметы. Мы прислали вам ссылку.',
@@ -226,6 +229,21 @@ export const ru: ServerMessages = {
     projectCompleted: (business: string, project: string) => ({
       subject: `Проект «${project}» завершён`,
       text: `Проект «${project}» отмечен как завершённый. Строитель: ${business}. Как всё прошло? Вы можете оставить отзыв.`,
+    }),
+    newJob: (title: string, location: string) => ({
+      subject: `Новый заказ: ${title}`,
+      text: `Клиент разместил заказ по вашим видам работ: «${title}», ${location}. Отправьте смету первым.`,
+    }),
+    jobDigest: (jobs: { title: string; location: string }[], total: number) => ({
+      subject: `${total} ${pluralRu(total, 'новый заказ', 'новых заказа', 'новых заказов')} по вашим видам работ`,
+      text: [
+        'Новые заказы по вашим видам работ:',
+        '',
+        ...jobs.map((job) => `• ${job.title} · ${job.location}`),
+        ...(total > jobs.length ? [`…и ещё ${total - jobs.length}.`] : []),
+        '',
+        'С Pro вы узнаёте о каждом заказе сразу после его размещения.',
+      ].join('\n'),
     }),
     message: (name: string) => ({
       subject: `Новое сообщение: ${name}`,

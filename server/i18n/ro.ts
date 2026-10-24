@@ -7,7 +7,6 @@ import {
   CHANGE_DAYS_MAX,
   DESCRIPTION_MAX,
   HEADLINE_MAX,
-  MAX_TRADES,
   MESSAGE_MAX,
   PASSWORD_MIN,
   PHOTOS_PER_UPDATE,
@@ -63,7 +62,7 @@ export const ro: ServerMessages = {
     enterAbout: 'Spuneți-le clienților câte ceva despre firma dvs.',
     aboutTooLong: `Secțiunea „Despre” trebuie să aibă mai puțin de ${chars(ABOUT_MAX)}.`,
     enterArea: 'Vă rugăm să introduceți zona în care lucrați.',
-    chooseTrades: `Alegeți între 1 și ${MAX_TRADES} domenii.`,
+    chooseTrades: (max: number) => `Alegeți între 1 și ${max} ${pluralRo(max, 'domeniu', 'domenii', 'de domenii')}.`,
     yearsWhole: 'Anii de activitate trebuie să fie un număr întreg.',
     licenseTooLong: 'Numărul licenței este prea lung.',
     unknownTrade: 'Domeniu necunoscut.',
@@ -84,6 +83,10 @@ export const ro: ServerMessages = {
     alreadyClosed: 'Această lucrare este deja închisă.',
     alreadyTaken: 'Această lucrare a fost deja închisă sau atribuită unui constructor.',
     currencyLocked: 'Moneda nu mai poate fi schimbată după ce constructorii au trimis oferte.',
+  },
+  plans: {
+    trialUsed: 'Ați folosit deja perioada gratuită de probă Pro.',
+    alreadyPro: 'Aveți deja Pro.',
   },
   quotes: {
     confirmEmailFirst: 'Confirmați-vă adresa de email înainte de a trimite oferte. V-am trimis un link.',
@@ -227,6 +230,21 @@ export const ro: ServerMessages = {
     projectCompleted: (business: string, project: string) => ({
       subject: `„${project}” este finalizat`,
       text: `${business} a marcat „${project}” ca finalizat. Cum a fost? Puteți lăsa o recenzie.`,
+    }),
+    newJob: (title: string, location: string) => ({
+      subject: `Lucrare nouă: ${title}`,
+      text: `Un client a publicat o lucrare în domeniile dvs.: „${title}”, în ${location}. Trimiteți primul o ofertă.`,
+    }),
+    jobDigest: (jobs: { title: string; location: string }[], total: number) => ({
+      subject: `${total} ${pluralRo(total, 'lucrare nouă', 'lucrări noi', 'de lucrări noi')} în domeniile dvs.`,
+      text: [
+        'Lucrări noi în domeniile dvs.:',
+        '',
+        ...jobs.map((job) => `• ${job.title} · ${job.location}`),
+        ...(total > jobs.length ? [`…și încă ${total - jobs.length}.`] : []),
+        '',
+        'Cu Pro, aflați de fiecare lucrare imediat ce este publicată.',
+      ].join('\n'),
     }),
     message: (name: string) => ({
       subject: `Mesaj nou de la ${name}`,
