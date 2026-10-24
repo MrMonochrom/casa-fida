@@ -76,15 +76,22 @@ export function sendJobAlerts(job: { id: number; title: string; location: string
 const DIGEST_JOBS = 10
 
 /**
+ * SQL that's true for a builder who hasn't had the daily email yet today, by the database's calendar.
+ * A calendar day rather than 24 hours: with a check every hour, "24 hours since the last one" would
+ * often fall just after a check and push the email an hour later each time.
+ */
+const NO_DIGEST_TODAY = '(jobs_digest_sent_at IS NULL OR jobs_digest_sent_at < CURDATE())'
+
+/**
  * Emails each builder on the free plan the jobs posted in their trades since their last such email,
- * at most once a day and only when there's something new. Called every hour. It remembers the newest
- * job it told them about, rather than a time, so a job posted the same second isn't skipped.
+ * at most once a calendar day and only when there's something new. Called every hour. It remembers the
+ * newest job it told them about, rather than a time, so a job posted the same second isn't skipped.
  */
 export async function sendJobDigests() {
   const [builders] = await db.execute<RowDataPacket[]>(
     `SELECT u.id FROM users u
      WHERE u.role = 'builder' AND u.email_jobs AND u.email_verified_at IS NOT NULL AND NOT ${isPro('u.')}
-       AND (u.jobs_digest_sent_at IS NULL OR u.jobs_digest_sent_at <= NOW() - INTERVAL 1 DAY)`,
+       AND ${NO_DIGEST_TODAY}`,
   )
   for (const builder of builders) {
     const [jobs] = await db.execute<RowDataPacket[]>(
@@ -100,7 +107,7 @@ export async function sendJobDigests() {
     // Marked before sending, so a second server checking at the same moment doesn't send it too.
     const [marked] = await db.execute<ResultSetHeader>(
       `UPDATE users SET jobs_digest_sent_at = NOW(), jobs_digest_last_job_id = ?
-       WHERE id = ? AND (jobs_digest_sent_at IS NULL OR jobs_digest_sent_at <= NOW() - INTERVAL 1 DAY)`,
+       WHERE id = ? AND ${NO_DIGEST_TODAY}`,
       [jobs[0].id, builder.id],
     )
     if (marked.affectedRows === 0) continue

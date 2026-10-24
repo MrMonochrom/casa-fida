@@ -72,11 +72,24 @@ describe('plans', () => {
     for (let i = 0; i < 30; i++) limits.newQuotesPerBuilderPerDay.hit(String(bob.user.id))
     expect((await quote()).status).toBe(429)
 
+    // On Pro the day's count carries on: the 30 already sent are part of its 100.
     await goPro(bob)
     expect((await quote()).status).toBe(201)
     await bob.agent.delete(`/api/jobs/${job.id}/quote`)
-    for (let i = 0; i < 99; i++) limits.newQuotesPerProBuilderPerDay.hit(String(bob.user.id))
+    for (let i = 0; i < 69; i++) limits.newQuotesPerBuilderPerDay.hit(String(bob.user.id))
     expect((await quote()).status).toBe(429)
+    vi.unstubAllEnvs()
+  })
+
+  it("count a day's new quotes together when Pro ends that day", async () => {
+    vi.stubEnv('RATE_LIMITS', 'on')
+    const ana = await createClient()
+    const job = await postJob(ana)
+    const bob = await createBuilder()
+    await goPro(bob)
+    for (let i = 0; i < 40; i++) limits.newQuotesPerBuilderPerDay.hit(String(bob.user.id))
+    await goPro(bob, 'NOW() - INTERVAL 1 MINUTE')
+    expect((await bob.agent.put(`/api/jobs/${job.id}/quote`).send({ amount: 100, message: 'Hi.' })).status).toBe(429)
     vi.unstubAllEnvs()
   })
 })
@@ -134,6 +147,17 @@ describe('new job emails', () => {
     const second = (await emailsTo(bob)).at(-1)!
     expect(second.text).toContain('• Kitchen C')
     expect(second.text).not.toContain('Kitchen A')
+  })
+
+  it('come again on the next calendar day, even under 24 hours after the last one', async () => {
+    const ana = await createClient()
+    const bob = await createBuilder({ trades: ['kitchens'] })
+    await postJob(ana, { title: 'Kitchen A', trade: 'kitchens' })
+    // The last one went at 23:30 yesterday: less than 24 hours ago, unless it's past 23:30 now.
+    await db.execute('UPDATE users SET jobs_digest_sent_at = CURDATE() - INTERVAL 30 MINUTE WHERE id = ?', [bob.user.id])
+    await sendJobDigests()
+    const [email] = await emailsTo(bob)
+    expect(email.text).toContain('• Kitchen A')
   })
 
   it('list ten jobs by name and count the rest, and skip days with nothing new', async () => {

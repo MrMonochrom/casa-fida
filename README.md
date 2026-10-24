@@ -138,7 +138,7 @@ Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx
 ## Tests
 
 ```sh
-npm test                 # all 538 tests
+npm test                 # all 540 tests
 npx vitest run --project web
 npx vitest run server/routes/billing.api.test.ts
 ```

@@ -12,6 +12,7 @@ import {
 } from '../../shared/rules.ts'
 import { DEFAULT_CURRENCY, isCurrency } from '../../shared/money.ts'
 import type { Currency } from '../../shared/money.ts'
+import { PLAN_LIMITS } from '../../shared/plans.ts'
 import { ensureConversation } from '../conversations.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
@@ -393,11 +394,10 @@ jobRoutes.put('/jobs/:id/quote', requireRole('builder'), async (req, res) => {
   // and only so many a day.
   const isNew = !existing || existing.status === 'withdrawn'
   const key = String(builder.id)
-  const newQuotes =
-    (await planOf(builder.id)) === 'pro' ? limits.newQuotesPerProBuilderPerDay : limits.newQuotesPerBuilderPerDay
   if (isNew) {
     if (!builder.email_verified_at) return fail(res, 409, (m) => m.quotes.confirmEmailFirst)
-    const wait = newQuotes.retryAfter(key)
+    const max = PLAN_LIMITS[await planOf(builder.id)].newQuotesPerDay
+    const wait = limits.newQuotesPerBuilderPerDay.retryAfter(key, max)
     if (wait) return tooManyAttempts(res, wait)
   }
   await db.execute(
@@ -408,7 +408,7 @@ jobRoutes.put('/jobs/:id/quote', requireRole('builder'), async (req, res) => {
   publish(job.client_id, { type: 'job', jobId: job.id })
   const quote = (await myQuoteOn(job.id, builder.id))!
   if (isNew) {
-    newQuotes.hit(key)
+    limits.newQuotesPerBuilderPerDay.hit(key)
     notify(
       job.client_id,
       'quotes',

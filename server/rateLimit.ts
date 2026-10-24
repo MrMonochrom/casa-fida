@@ -19,11 +19,14 @@ export class Limiter {
     limiters.add(this)
   }
 
-  /** Seconds until `key` may try again, or 0 if it may try now. */
-  retryAfter(key: string): number {
+  /**
+   * Seconds until `key` may try again, or 0 if it may try now. `max` overrides the limit for this
+   * key, for limits that depend on who's asking (like a builder's plan) but count in one place.
+   */
+  retryAfter(key: string, max = this.max): number {
     if (process.env.RATE_LIMITS === 'off') return 0
     const entry = this.attempts.get(key)
-    if (!entry || entry.resetAt <= Date.now() || entry.count < this.max) return 0
+    if (!entry || entry.resetAt <= Date.now() || entry.count < max) return 0
     return Math.ceil((entry.resetAt - Date.now()) / 1000)
   }
 
@@ -89,7 +92,10 @@ export const limits = {
   passwordResetsPerEmail: new Limiter(3, 60 * MINUTE),
   /** Jobs one client can post in a day: each one emails the builders on Pro in its trade. */
   jobsPerClientPerDay: new Limiter(5, DAY),
-  /** New quotes one builder can send in a day (each one emails a client), by plan. */
+  /**
+   * New quotes one builder can send in a day (each one emails a client). One count whatever their
+   * plan; the limit is their plan's at the time (PLAN_LIMITS), so changing plan mid-day doesn't
+   * start the count again.
+   */
   newQuotesPerBuilderPerDay: new Limiter(PLAN_LIMITS.free.newQuotesPerDay, DAY),
-  newQuotesPerProBuilderPerDay: new Limiter(PLAN_LIMITS.pro.newQuotesPerDay, DAY),
 }
