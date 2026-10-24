@@ -5,7 +5,7 @@ import { db } from '../db.ts'
 import { outbox } from '../mailer.ts'
 import { notificationsSent, sendJobDigests } from '../notifications.ts'
 import { limits } from '../rateLimit.ts'
-import { createBuilder, createClient, postJob, resetDb, validBuilderProfile } from '../test/helpers.ts'
+import { createBuilder, createClient, newAgent, postJob, resetDb, validBuilderProfile, validJob } from '../test/helpers.ts'
 import type { Person } from '../test/helpers.ts'
 
 beforeEach(resetDb)
@@ -158,6 +158,78 @@ describe('new job emails', () => {
     outbox.length = 0
     await sendJobDigests()
     expect(await emailsTo(pro)).toHaveLength(0)
+  })
+
+  it('wait until the client has confirmed their address, then go out', async () => {
+    const ana = await createClient({ verified: false })
+    const pro = await createBuilder({ trades: ['kitchens'] })
+    await goPro(pro)
+    const job = await postJob(ana, { title: 'New kitchen', trade: 'kitchens' })
+    expect(await emailsTo(pro)).toHaveLength(0)
+
+    await ana.agent.post('/api/me/verify-email')
+    const token = decodeURIComponent(/\/verify-email\?token=(\S+)/.exec(outbox.at(-1)!.text)![1])
+    await newAgent().post('/api/verify-email').send({ token })
+    const [email] = await emailsTo(pro)
+    expect(email.subject).toBe('New job: New kitchen')
+    expect(email.text).toContain(`/jobs/${job.id}`)
+  })
+
+  it("leave jobs from clients who haven't confirmed their address out of the daily email", async () => {
+    const ana = await createClient()
+    const eve = await createClient({ verified: false })
+    const bob = await createBuilder({ trades: ['kitchens'] })
+    await postJob(ana, { title: 'Real kitchen', trade: 'kitchens' })
+    await postJob(eve, { title: 'Visit evil.example', trade: 'kitchens' })
+    await sendJobDigests()
+    const [email] = await emailsTo(bob)
+    expect(email.text).toContain('• Real kitchen')
+    expect(email.text).not.toContain('evil.example')
+  })
+
+  it('stop a client at 5 new jobs a day', async () => {
+    vi.stubEnv('RATE_LIMITS', 'on')
+    const ana = await createClient()
+    for (let i = 0; i < 5; i++) expect((await ana.agent.post('/api/jobs').send(validJob())).status).toBe(201)
+    expect((await ana.agent.post('/api/jobs').send(validJob())).status).toBe(429)
+    vi.unstubAllEnvs()
+  })
+})
+
+describe('trades after Pro ends', () => {
+  it('count only the first six chosen, until the builder picks which to keep', async () => {
+    const twelve = ['carpentry', 'new_homes', 'extensions', 'renovations', 'kitchens', 'bathrooms',
+      'roofing', 'basements_attics', 'decks_landscaping', 'electrical', 'plumbing', 'painting']
+    const bob = await createBuilder()
+    await bob.agent.post('/api/me/plan/trial')
+    expect((await bob.agent.put('/api/me/builder-profile').send(validBuilderProfile({ trades: twelve }))).status).toBe(200)
+    await db.execute('UPDATE users SET plan_ends_at = NOW() - INTERVAL 1 MINUTE WHERE id = ?', [bob.user.id])
+
+    // The profile keeps all twelve, in the order chosen, so the builder can see which still count.
+    expect((await bob.agent.get('/api/me')).body.user.builderProfile.trades).toEqual(twelve)
+
+    // Everywhere else, only the first six: carpentry (chosen first) counts, roofing (seventh) doesn't.
+    const ana = await createClient()
+    const found = async (trade: string) =>
+      (await ana.agent.get(`/api/builders?trade=${trade}`)).body.builders.map((b: { id: number }) => b.id)
+    expect(await found('carpentry')).toEqual([bob.user.id])
+    expect(await found('roofing')).toEqual([])
+    expect((await ana.agent.get(`/api/builders/${bob.user.id}`)).body.builder.trades).toEqual(twelve.slice(0, 6).sort())
+
+    await postJob(ana, { title: 'Shelves', trade: 'carpentry' })
+    await postJob(ana, { title: 'New roof', trade: 'roofing' })
+    const listed = (await bob.agent.get('/api/jobs?trade=mine')).body.jobs.map((j: { title: string }) => j.title)
+    expect(listed).toEqual(['Shelves'])
+    expect((await bob.agent.get('/api/summary')).body.jobs).toBe(1)
+    await sendJobDigests()
+    const [email] = await emailsTo(bob)
+    expect(email.text).toContain('• Shelves')
+    expect(email.text).not.toContain('New roof')
+
+    // Keeping the other six makes those the ones that count.
+    expect((await bob.agent.put('/api/me/builder-profile').send(validBuilderProfile({ trades: twelve.slice(6) }))).status).toBe(200)
+    expect(await found('roofing')).toEqual([bob.user.id])
+    expect(await found('carpentry')).toEqual([])
   })
 })
 

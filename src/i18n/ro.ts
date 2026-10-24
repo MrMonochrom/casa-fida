@@ -226,6 +226,8 @@ export const ro: Messages = {
     insured: 'Avem asigurare de răspundere civilă',
     trades: 'Domeniile în care lucrați',
     upTo: (n: number) => `(cel mult ${n})`,
+    overLimit: (max: number, paused: string) =>
+      `Planul dvs. include ${max} domenii, așa că acestea nu contează deocamdată: ${paused}. Eliminați domenii până rămân ${max} ca să puteți salva.`,
   },
   invite: {
     broken: 'Acest link nu mai funcționează',

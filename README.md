@@ -26,6 +26,7 @@ npm run db:shell < db/migrations/002-email-verification.sql   # existing account
 npm run db:shell < db/migrations/003-password-reset-and-notifications.sql
 npm run db:shell < db/migrations/004-builder-plans.sql
 npm run db:shell < db/migrations/005-emailed-invite-links.sql
+npm run db:shell < db/migrations/006-trade-order.sql
 ```
 
 Without `SMTP_URL`, emails (like the link that confirms a new account's email address) are printed in the terminal running `npm run dev`.
@@ -52,7 +53,7 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 ### For clients
 
 - **Find a builder:** search by name or area and filter by trade. Profiles show reviews, years in business, license and insurance, and finished projects. Message any builder from their profile.
-- **Post a job:** what you need, the kind of work, where, a budget range and when to start. Builders in that trade see it and send quotes.
+- **Post a job:** what you need, the kind of work, where, a budget range and when to start. Builders in that trade see it and send quotes. Up to 5 jobs a day; builders get emails about them once you've confirmed your email address.
 - **Compare quotes and hire:** each quote shows the price, how long it takes, what's included and the builder's rating. Accepting one starts the project, declines the others and closes the job.
 - **Accept a proposal:** a builder you've already talked to can send you the work and price directly. It goes straight into your account once you've confirmed your email address; otherwise the email has a link to sign up (or log in) and see it. Until you accept, the builder sees only the name and email they typed, not your own details or phone number.
 - **Follow the project:** progress through its stages, photo updates, change orders to approve or decline before they count, and every invoice with what's been paid.
@@ -64,7 +65,7 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 - **Find work:** open jobs in your trades (or any trade), and quotes you can change or withdraw until the client answers.
 - **Send a proposal** for work you've agreed on outside the app, with its stages.
 - **Run the project:** tick off stages, post updates with photos (shrunk in the browser before uploading), send change orders and invoices, mark invoices paid when the money arrives, and mark the project completed.
-- **Free or Pro plan:** on Free, an email once a day lists new jobs in your trades; up to 30 new quotes a day and 6 trades. Pro emails each new job the moment it's posted, and allows 100 new quotes a day and 12 trades. Every builder can try Pro free for 14 days from Account. Paying for Pro comes once online payments are set up; until then, `npm run plan` puts a builder on a plan by hand.
+- **Free or Pro plan:** on Free, an email once a day lists new jobs in your trades; up to 30 new quotes a day and 6 trades. Pro emails each new job the moment it's posted, and allows 100 new quotes a day and 12 trades. Every builder can try Pro free for 14 days from Account. When Pro ends, the first 6 trades a builder chose keep counting (in search, job lists and emails) and the rest don't, until they choose which to keep. Paying for Pro comes once online payments are set up; until then, `npm run plan` puts a builder on a plan by hand.
 
 ### For both
 
@@ -137,7 +138,7 @@ Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx
 ## Tests
 
 ```sh
-npm test                 # all 531 tests
+npm test                 # all 538 tests
 npx vitest run --project web
 npx vitest run server/routes/billing.api.test.ts
 ```

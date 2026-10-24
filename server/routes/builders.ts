@@ -11,7 +11,7 @@ import type { Trade } from '../../shared/rules.ts'
 import { PLAN_LIMITS } from '../../shared/plans.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { me, requireRole, requireUser } from '../session.ts'
-import { loadUser, ownAccount, planOf, shortName, tradesFrom } from '../users.ts'
+import { loadUser, ownAccount, planOf, shortName, tradeCovered, tradesFrom } from '../users.ts'
 import { badRequest, fail, idFrom, invalid, longText, text, wholeFrom } from '../validate.ts'
 
 export const builderRoutes = express.Router()
@@ -82,8 +82,9 @@ builderRoutes.put('/me/builder-profile', requireRole('builder'), async (req, res
       ],
     )
     await conn.execute('DELETE FROM builder_trades WHERE user_id = ?', [userId])
-    for (const trade of input.trades) {
-      await conn.execute('INSERT INTO builder_trades (user_id, trade) VALUES (?, ?)', [userId, trade])
+    // In the order chosen: if Pro ends, the first ones are those that still count.
+    for (const [position, trade] of input.trades.entries()) {
+      await conn.execute('INSERT INTO builder_trades (user_id, trade, position) VALUES (?, ?, ?)', [userId, trade, position])
     }
   })
   res.json({ user: await ownAccount((await loadUser(userId))!) })
@@ -109,7 +110,8 @@ interface CardRow extends RowDataPacket {
 const CARD_SELECT = `
   SELECT u.id, u.name, ${ms('u.created_at')} AS member_since,
          b.business_name, b.headline, b.about, b.service_area, b.years_in_business, b.license_number, b.insured,
-         (SELECT GROUP_CONCAT(t.trade ORDER BY t.trade) FROM builder_trades t WHERE t.user_id = u.id) AS trades,
+         (SELECT GROUP_CONCAT(t.trade ORDER BY t.trade) FROM builder_trades t
+          WHERE t.user_id = u.id AND ${tradeCovered()}) AS trades,
          (SELECT AVG(r.rating) FROM reviews r WHERE r.builder_id = u.id) AS rating,
          (SELECT COUNT(*) FROM reviews r WHERE r.builder_id = u.id) AS review_count,
          (SELECT COUNT(*) FROM projects p WHERE p.builder_id = u.id AND p.status = 'completed') AS completed_projects
@@ -147,7 +149,7 @@ builderRoutes.get('/builders', requireUser, async (req, res) => {
   const where: string[] = []
   const params: string[] = []
   if (trade) {
-    where.push('EXISTS (SELECT 1 FROM builder_trades t WHERE t.user_id = u.id AND t.trade = ?)')
+    where.push(`EXISTS (SELECT 1 FROM builder_trades t WHERE t.user_id = u.id AND t.trade = ? AND ${tradeCovered()})`)
     params.push(trade)
   }
   if (q) {

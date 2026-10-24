@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Trade } from '../../shared/rules'
 import { api } from '../api'
 import { makeBuilderUser, makeUser } from '../test/fixtures'
 import { resetApiMocks } from '../test/mockApi'
@@ -56,6 +57,15 @@ describe('the plan on Account', () => {
   it('lets a builder offer as many trades as the plan allows', () => {
     renderAs(pro(), <Account />)
     expect(screen.getByText('(up to 12)')).toBeInTheDocument()
+  })
+
+  it('names the trades that stopped counting when Pro ended, in the order they were chosen', () => {
+    const trades: Trade[] = ['kitchens', 'bathrooms', 'roofing', 'painting', 'flooring', 'plumbing', 'electrical', 'carpentry']
+    const builder = makeBuilderUser()
+    renderAs(makeBuilderUser({ builderProfile: { ...builder.builderProfile!, trades } }), <Account />)
+    expect(screen.getByText(/don't count for now/)).toHaveTextContent(
+      "Your plan covers 6 trades, so these don't count for now: Electrical, Carpentry. Remove trades until you have 6 to save.",
+    )
   })
 
   it('names how new-job emails come on each plan', () => {

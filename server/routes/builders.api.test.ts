@@ -20,7 +20,8 @@ describe('PUT /api/me/builder-profile', () => {
       yearsInBusiness: 10,
       licenseNumber: 'GC-1',
       insured: true,
-      trades: ['kitchens', 'roofing'],
+      // In the order chosen, once each.
+      trades: ['roofing', 'kitchens'],
     })
   })
 

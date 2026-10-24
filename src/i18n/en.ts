@@ -188,6 +188,8 @@ export const en = {
     insured: 'We carry liability insurance',
     trades: 'Trades you offer',
     upTo: (n: number) => `(up to ${n})`,
+    overLimit: (max: number, paused: string) =>
+      `Your plan covers ${max} trades, so these don't count for now: ${paused}. Remove trades until you have ${max} to save.`,
   },
   invite: {
     broken: "This link doesn't work any more",

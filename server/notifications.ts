@@ -6,7 +6,7 @@ import { db } from './db.ts'
 import { messagesIn } from './i18n/index.ts'
 import type { ServerMessages } from './i18n/index.ts'
 import { appUrl, sendEmail } from './mailer.ts'
-import { isPro } from './users.ts'
+import { isPro, tradeCovered } from './users.ts'
 
 /** The kinds of email people can turn off in Account. */
 export type EmailKind = 'quotes' | 'projects' | 'messages' | 'jobs'
@@ -56,13 +56,14 @@ export function notify(userId: number | null | undefined, kind: EmailKind, write
 
 /**
  * Tells builders on Pro about a new job in their trades as soon as it's posted. Builders on the
- * free plan hear about it in their daily email (sendJobDigests).
+ * free plan hear about it in their daily email (sendJobDigests). Called only for jobs from clients who
+ * have confirmed their address, since the job's title and place are in the email.
  */
 export function sendJobAlerts(job: { id: number; title: string; location: string; trade: string }) {
   inBackground(async () => {
     const [builders] = await db.execute<RowDataPacket[]>(
       `SELECT u.id FROM users u JOIN builder_trades t ON t.user_id = u.id
-       WHERE t.trade = ? AND u.role = 'builder' AND ${isPro('u.')}`,
+       WHERE t.trade = ? AND u.role = 'builder' AND ${isPro('u.')} AND ${tradeCovered()}`,
       [job.trade],
     )
     for (const builder of builders) {
@@ -87,9 +88,9 @@ export async function sendJobDigests() {
   )
   for (const builder of builders) {
     const [jobs] = await db.execute<RowDataPacket[]>(
-      `SELECT j.id, j.title, j.location FROM jobs j JOIN users u ON u.id = ?
-       WHERE j.status = 'open'
-         AND j.trade IN (SELECT trade FROM builder_trades WHERE user_id = u.id)
+      `SELECT j.id, j.title, j.location FROM jobs j JOIN users u ON u.id = ? JOIN users c ON c.id = j.client_id
+       WHERE j.status = 'open' AND c.email_verified_at IS NOT NULL
+         AND j.trade IN (SELECT t.trade FROM builder_trades t WHERE t.user_id = u.id AND ${tradeCovered()})
          AND IF(u.jobs_digest_last_job_id IS NULL, j.created_at > NOW() - INTERVAL 1 DAY, j.id > u.jobs_digest_last_job_id)
          AND NOT EXISTS (SELECT 1 FROM quotes q WHERE q.job_id = j.id AND q.builder_id = u.id)
        ORDER BY j.id DESC`,

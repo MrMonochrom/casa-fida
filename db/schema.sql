@@ -71,6 +71,8 @@ CREATE TABLE builder_profiles (
 CREATE TABLE builder_trades (
   user_id INT UNSIGNED NOT NULL,
   trade VARCHAR(40) NOT NULL,
+  -- The order the builder chose it in, from 0. Their plan covers the first ones, up to its limit.
+  position TINYINT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, trade),
   INDEX (trade),
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE

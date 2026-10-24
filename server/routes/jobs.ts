@@ -20,7 +20,7 @@ import { publish } from '../events.ts'
 import { notify, sendJobAlerts } from '../notifications.ts'
 import { limits, tooManyAttempts } from '../rateLimit.ts'
 import { me, requireRole, requireUser } from '../session.ts'
-import { planOf, shortName } from '../users.ts'
+import { planOf, shortName, tradeCovered } from '../users.ts'
 import type { UserRow } from '../users.ts'
 import { amountFrom, badRequest, fail, idFrom, invalid, longText, text, wholeFrom } from '../validate.ts'
 
@@ -203,14 +203,20 @@ async function quotingBuilders(jobId: number): Promise<number[]> {
 
 // ---------- Clients: posting and managing jobs ----------
 
+// Posts a job. Builders on Pro in its trade hear about it straight away, but only from clients who
+// have confirmed their address (otherwise once they do), and a client can post only so many a day.
 jobRoutes.post('/jobs', requireRole('client'), async (req, res) => {
+  const client = me(res)
   const input = readJob(req.body ?? {})
   if ('error' in input) return badRequest(res, input.error)
+  const key = String(client.id)
+  const wait = limits.jobsPerClientPerDay.retryAfter(key)
+  if (wait) return tooManyAttempts(res, wait)
   const [result] = await db.execute<ResultSetHeader>(
     `INSERT INTO jobs (client_id, title, description, trade, location, currency, budget_min, budget_max, timing)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      me(res).id,
+      client.id,
       input.title,
       input.description,
       input.trade,
@@ -221,8 +227,9 @@ jobRoutes.post('/jobs', requireRole('client'), async (req, res) => {
       input.timing,
     ],
   )
+  limits.jobsPerClientPerDay.hit(key)
   const job = (await loadJob(result.insertId))!
-  sendJobAlerts({ id: job.id, title: job.title, location: job.location, trade: job.trade })
+  if (client.email_verified_at) sendJobAlerts(job)
   res.status(201).json({ job: toJob(job, false) })
 })
 
@@ -293,7 +300,8 @@ jobRoutes.get('/jobs', requireRole('builder'), async (req, res) => {
   let filter = ''
   const params: (string | number)[] = []
   if (trade === 'mine') {
-    filter = 'AND j.trade IN (SELECT trade FROM builder_trades WHERE user_id = ?)'
+    filter = `AND j.trade IN (SELECT t.trade FROM builder_trades t JOIN users b ON b.id = t.user_id
+                              WHERE t.user_id = ? AND ${tradeCovered('t.', 'b.')})`
     params.push(builderId)
   } else if (trade) {
     if (!isTrade(trade)) return badRequest(res, (m) => m.builders.unknownTrade)

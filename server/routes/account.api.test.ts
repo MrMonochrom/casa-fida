@@ -85,7 +85,7 @@ describe('POST /api/login', () => {
   it('includes a builder their business profile', async () => {
     const bob = await createBuilder({ businessName: 'Bob Builds' })
     const res = await newAgent().post('/api/login').send({ email: bob.email, password: PASSWORD })
-    expect(res.body.user.builderProfile).toMatchObject({ businessName: 'Bob Builds', trades: ['extensions', 'kitchens'] })
+    expect(res.body.user.builderProfile).toMatchObject({ businessName: 'Bob Builds', trades: ['kitchens', 'extensions'] })
   })
 
   it('says the same thing for a wrong password and an unknown email', async () => {

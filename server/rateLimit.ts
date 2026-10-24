@@ -87,6 +87,8 @@ export const limits = {
   /** Password reset emails: asked for from one IP address, and sent to one address. */
   passwordResetsPerIp: new Limiter(10, 60 * MINUTE),
   passwordResetsPerEmail: new Limiter(3, 60 * MINUTE),
+  /** Jobs one client can post in a day: each one emails the builders on Pro in its trade. */
+  jobsPerClientPerDay: new Limiter(5, DAY),
   /** New quotes one builder can send in a day (each one emails a client), by plan. */
   newQuotesPerBuilderPerDay: new Limiter(PLAN_LIMITS.free.newQuotesPerDay, DAY),
   newQuotesPerProBuilderPerDay: new Limiter(PLAN_LIMITS.pro.newQuotesPerDay, DAY),
