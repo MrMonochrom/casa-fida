@@ -7,25 +7,47 @@ import { outbox } from '../mailer.ts'
 
 type Execute = (...args: unknown[]) => Promise<unknown>
 
+/** The SQL of an execute() call, whether it was given as a string or as { sql, … }. */
+const sqlOf = (query: unknown) => (typeof query === 'string' ? query : String((query as { sql?: unknown })?.sql ?? ''))
+
 /**
- * Makes statements starting with `sqlStart` fail on the pool and on every connection taken from it
- * (used by transactions); others run normally. Undo with vi.restoreAllMocks().
+ * Puts `wrap` around every statement run on the pool, and on every connection taken from it (used
+ * by transactions). Undo with vi.restoreAllMocks().
  */
-export function breakDatabase(sqlStart: string) {
-  const breakOn = (target: object) => {
+function interceptQueries(wrap: (sql: string, run: () => Promise<unknown>) => Promise<unknown>) {
+  const patch = (target: object) => {
     const withExecute = target as { execute: Execute }
     const original = withExecute.execute.bind(target)
-    vi.spyOn(withExecute, 'execute').mockImplementation(async (...args: unknown[]) => {
-      if (String(args[0]).trimStart().startsWith(sqlStart)) throw new Error('Simulated database failure')
-      return original(...args)
-    })
+    vi.spyOn(withExecute, 'execute').mockImplementation((...args: unknown[]) =>
+      wrap(sqlOf(args[0]), () => original(...args)),
+    )
   }
-  breakOn(db)
+  patch(db)
   const getConnection = db.getConnection.bind(db)
   vi.spyOn(db, 'getConnection').mockImplementation(async () => {
     const conn = await getConnection()
-    breakOn(conn)
+    patch(conn)
     return conn
+  })
+}
+
+/** Makes statements starting with `sqlStart` fail; others run normally. Undo with vi.restoreAllMocks(). */
+export function breakDatabase(sqlStart: string) {
+  interceptQueries((sql, run) =>
+    sql.trimStart().startsWith(sqlStart) ? Promise.reject(new Error('Simulated database failure')) : run(),
+  )
+}
+
+/**
+ * Makes reads whose SQL matches `pattern` return their rows as `change` alters them: as if another
+ * request changed the data just after this one read it. For checking that writes don't trust what
+ * was read. Undo with vi.restoreAllMocks().
+ */
+export function staleReads(pattern: RegExp, change: (row: Record<string, unknown>) => void) {
+  interceptQueries(async (sql, run) => {
+    const result = (await run()) as [unknown, unknown]
+    if (pattern.test(sql) && Array.isArray(result[0])) for (const row of result[0]) change(row)
+    return result
   })
 }
 

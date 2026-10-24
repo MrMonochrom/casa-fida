@@ -98,9 +98,6 @@ export function ProjectPage({ id }: { id: number | null }) {
     setConfirming(null)
   }
 
-  const pendingChanges = p.changeOrders.filter((c) => c.status === 'pending').length
-  const dueInvoices = p.invoices.filter((i) => i.status === 'due').length
-
   return (
     <>
       <BackLink to="/projects">{t.nav.projects}</BackLink>
@@ -171,8 +168,8 @@ export function ProjectPage({ id }: { id: number | null }) {
           >
             {t.project.changesAndInvoices}{' '}
             <CountBadge
-              count={isBuilder ? 0 : pendingChanges + dueInvoices}
-              label={t.project.waitingForYou(pendingChanges + dueInvoices)}
+              count={isBuilder ? 0 : p.waitingOnClient}
+              label={t.project.waitingForYou(p.waitingOnClient)}
             />
           </button>
         </nav>

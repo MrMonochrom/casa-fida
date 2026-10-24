@@ -206,6 +206,7 @@ export function makeProject(overrides: Partial<Project> = {}): Project {
       leftToInvoice: 10_000_000,
       daysAdded: 0,
     },
+    waitingOnClient: 0,
     stages: [
       { id: 1, name: 'Foundation', status: 'done' },
       { id: 2, name: 'Framing', status: 'in_progress' },

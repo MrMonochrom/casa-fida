@@ -36,7 +36,20 @@ export interface ProjectRow extends RowDataPacket {
   client_user_name: string | null
   client_user_email: string | null
   client_phone: string | null
+  pending_changes: number
+  due_invoices: number
+  waiting_on_client: number
 }
+
+/**
+ * What's waiting on a project's client, as SQL for the project `p`: change orders to approve (only
+ * while the work is in progress, the only time they can be answered), invoices to pay, and, in
+ * WAITING_ON_CLIENT, a proposal to answer too. The project list, the project page and the menu
+ * badge all count with these, so they always agree.
+ */
+const PENDING_CHANGES = `(SELECT COUNT(*) FROM change_orders c WHERE c.project_id = p.id AND c.status = 'pending' AND p.status = 'active')`
+const DUE_INVOICES = `(SELECT COUNT(*) FROM invoices i WHERE i.project_id = p.id AND i.status = 'due')`
+export const WAITING_ON_CLIENT = `((p.status = 'proposed') + ${PENDING_CHANGES} + ${DUE_INVOICES})`
 
 /** SELECT … FROM projects with the builder's and client's details. `extra` adds more columns. */
 export const projectSelect = (extra = '') => `
@@ -44,7 +57,9 @@ export const projectSelect = (extra = '') => `
          ${ms('p.completed_at')} AS completed_at,
          bu.name AS builder_name, bu.email AS builder_email, bu.phone AS builder_phone,
          COALESCE(b.business_name, bu.name) AS business_name,
-         cu.name AS client_user_name, cu.email AS client_user_email, cu.phone AS client_phone ${extra}
+         cu.name AS client_user_name, cu.email AS client_user_email, cu.phone AS client_phone,
+         ${PENDING_CHANGES} AS pending_changes, ${DUE_INVOICES} AS due_invoices,
+         ${WAITING_ON_CLIENT} AS waiting_on_client ${extra}
   FROM projects p
   JOIN users bu ON bu.id = p.builder_id
   LEFT JOIN builder_profiles b ON b.user_id = p.builder_id

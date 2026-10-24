@@ -245,6 +245,8 @@ export interface Project {
   client: { id: number; name: string; email: string; phone: string | null } | null
   invitedClient: { name: string; email: string } | null
   money: ProjectMoney
+  /** Things only the client can move forward, counted as on the project list and the menu badge. */
+  waitingOnClient: number
   stages: Stage[]
   changeOrders: ChangeOrder[]
   invoices: Invoice[]

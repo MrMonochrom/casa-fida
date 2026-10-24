@@ -153,6 +153,8 @@ export async function projectDetail(project: ProjectRow, side: Side) {
     // Who the proposal was sent to, until they have an account.
     invitedClient: linked ? null : { name: project.client_name, email: project.client_email },
     money,
+    // Counted as the project list and the menu badge count it (WAITING_ON_CLIENT).
+    waitingOnClient: Number(project.waiting_on_client),
     stages,
     changeOrders,
     invoices,
@@ -165,8 +167,6 @@ export async function projectDetail(project: ProjectRow, side: Side) {
 interface SummaryRow extends ProjectRow {
   stages_done: number
   stages_total: number
-  pending_changes: number
-  due_invoices: number
   overdue_invoices: number
   changes: number
   invoiced: number
@@ -181,8 +181,6 @@ projectRoutes.get('/projects', requireUser, async (_req, res) => {
     `${projectSelect(
       `, (SELECT COUNT(*) FROM stages s WHERE s.project_id = p.id AND s.status = 'done') AS stages_done,
          (SELECT COUNT(*) FROM stages s WHERE s.project_id = p.id) AS stages_total,
-         (SELECT COUNT(*) FROM change_orders c WHERE c.project_id = p.id AND c.status = 'pending') AS pending_changes,
-         (SELECT COUNT(*) FROM invoices i WHERE i.project_id = p.id AND i.status = 'due') AS due_invoices,
          (SELECT COUNT(*) FROM invoices i WHERE i.project_id = p.id AND i.status = 'due' AND i.due_date < CURDATE()) AS overdue_invoices,
          (SELECT COALESCE(SUM(c.amount), 0) FROM change_orders c WHERE c.project_id = p.id AND c.status = 'approved') AS changes,
          (SELECT COALESCE(SUM(i.amount), 0) FROM invoices i WHERE i.project_id = p.id AND i.status <> 'void') AS invoiced,
@@ -195,8 +193,6 @@ projectRoutes.get('/projects', requireUser, async (_req, res) => {
   res.json({
     projects: rows.map((r) => {
       const total = r.contract_amount + Number(r.changes)
-      const pendingChanges = Number(r.pending_changes)
-      const dueInvoices = Number(r.due_invoices)
       return {
         id: r.id,
         title: r.title,
@@ -215,11 +211,11 @@ projectRoutes.get('/projects', requireUser, async (_req, res) => {
         invitedClient: r.client_id ? null : { name: r.client_name, email: r.client_email },
         progress: { done: Number(r.stages_done), total: Number(r.stages_total) },
         money: { total, invoiced: Number(r.invoiced), paid: Number(r.paid) },
-        pendingChanges,
-        dueInvoices,
+        pendingChanges: Number(r.pending_changes),
+        dueInvoices: Number(r.due_invoices),
         overdueInvoices: Number(r.overdue_invoices),
         // Things only the client can move forward: a proposal to answer, changes to approve, invoices to pay.
-        waitingOnClient: (r.status === 'proposed' ? 1 : 0) + pendingChanges + dueInvoices,
+        waitingOnClient: Number(r.waiting_on_client),
       }
     }),
   })
@@ -398,11 +394,15 @@ projectRoutes.put('/projects/:id', requireRole('builder'), async (req, res) => {
     if (!isCurrency(req.body.currency)) return badRequest(res, (m) => m.general.chooseCurrency)
     currency = req.body.currency
   }
-  await db.execute(
+  // A new price only while it's still a proposal, checked as it's saved: the client may have
+  // accepted the old one a moment ago, in another window.
+  const priceChanged = amount !== project.contract_amount || currency !== project.currency
+  const [result] = await db.execute<ResultSetHeader>(
     `UPDATE projects SET title = ?, description = ?, address = ?, start_date = ?, currency = ?, contract_amount = ?
-     WHERE id = ?`,
+     WHERE id = ? ${priceChanged ? "AND status = 'proposed'" : ''}`,
     [details.title, details.description, details.address, details.startDate, currency, amount, project.id],
   )
+  if (priceChanged && result.affectedRows === 0) throw conflict((m) => m.projects.priceAgreed)
   publish(project.client_id, { type: 'project', projectId: project.id })
   res.json({ project: await projectDetail((await loadProject(project.id))!, 'builder') })
 })
@@ -410,7 +410,12 @@ projectRoutes.put('/projects/:id', requireRole('builder'), async (req, res) => {
 // Withdraws a proposal the client hasn't accepted, or clears away a declined one.
 projectRoutes.delete('/projects/:id', requireRole('builder'), async (req, res) => {
   const project = await projectAs(res, req.params.id, 'builder', ['proposed', 'declined'])
-  await db.execute('DELETE FROM projects WHERE id = ?', [project.id])
+  // Not once the client has accepted it, which may have happened a moment ago.
+  const [result] = await db.execute<ResultSetHeader>(
+    "DELETE FROM projects WHERE id = ? AND status IN ('proposed', 'declined')",
+    [project.id],
+  )
+  if (result.affectedRows === 0) throw conflict((m) => m.projects.changed)
   publish(project.client_id, { type: 'project', projectId: project.id })
   res.status(204).end()
 })
@@ -442,17 +447,34 @@ projectRoutes.post('/projects/:id/accept', requireRole('client'), async (req, re
 
 projectRoutes.post('/projects/:id/decline', requireRole('client'), async (req, res) => {
   const project = await projectAs(res, req.params.id, 'client', ['proposed'])
-  await db.execute("UPDATE projects SET status = 'declined' WHERE id = ?", [project.id])
+  // Only while it's still a proposal: the client may have accepted it a moment ago, in another window.
+  const [result] = await db.execute<ResultSetHeader>(
+    "UPDATE projects SET status = 'declined' WHERE id = ? AND status = 'proposed'",
+    [project.id],
+  )
+  if (result.affectedRows === 0) throw conflict((m) => m.projects.changed)
   publish(project.builder_id, { type: 'project', projectId: project.id })
   notify(project.builder_id, 'projects', (m) => m.proposalAnswered(project.title, false), `/projects/${project.id}`)
   res.json({ project: await projectDetail((await loadProject(project.id))!, 'client') })
 })
 
-// The builder marks the work as finished. The client can then leave a review.
+// The builder marks the work as finished. The client can then leave a review. Change orders still
+// waiting for an answer are withdrawn: they can only be answered while the work is in progress.
 projectRoutes.post('/projects/:id/complete', requireRole('builder'), async (req, res) => {
   const project = await projectAs(res, req.params.id, 'builder', ['active'])
-  await db.execute("UPDATE projects SET status = 'completed', completed_at = NOW() WHERE id = ?", [project.id])
-  await db.execute("UPDATE stages SET status = 'done' WHERE project_id = ?", [project.id])
+  await inTransaction(async (conn) => {
+    const [result] = await conn.execute<ResultSetHeader>(
+      "UPDATE projects SET status = 'completed', completed_at = NOW() WHERE id = ? AND status = 'active'",
+      [project.id],
+    )
+    // Completed a moment ago, in another window.
+    if (result.affectedRows === 0) throw conflict((m) => m.projects.notWhile.completed)
+    await conn.execute("UPDATE stages SET status = 'done' WHERE project_id = ?", [project.id])
+    await conn.execute(
+      "UPDATE change_orders SET status = 'withdrawn', decided_at = NOW() WHERE project_id = ? AND status = 'pending'",
+      [project.id],
+    )
+  })
   publish(project.client_id, { type: 'project', projectId: project.id })
   notify(
     project.client_id,

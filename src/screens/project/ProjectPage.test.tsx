@@ -150,7 +150,10 @@ describe('stages', () => {
 describe('change orders and invoices', () => {
   it('lets the client approve a change, saying what it does to the price', async () => {
     const change = makeChangeOrder({ id: 70, title: 'Add a skylight', amount: 285_000, days: 3 })
-    const { session } = openProject(makeProject({ id: 6, changeOrders: [change] }), '/projects/6?tab=money')
+    const { session } = openProject(
+      makeProject({ id: 6, changeOrders: [change], waitingOnClient: 1 }),
+      '/projects/6?tab=money',
+    )
     expect(await screen.findByRole('heading', { name: 'Add a skylight' })).toBeInTheDocument()
     expect(screen.getByLabelText('1 waiting for you')).toBeInTheDocument()
 
