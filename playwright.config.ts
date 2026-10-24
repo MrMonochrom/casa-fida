@@ -26,7 +26,9 @@ export default defineConfig({
   outputDir: 'e2e/results',
   globalSetup: './e2e/support/global-setup.ts',
   reporter: [
-    [ci ? 'github' : 'list'],
+    // On CI, failures also become notes on the pull request; the list shows each scenario as it runs.
+    ...(ci ? [['github'] as const] : []),
+    ['list'],
     ['html', { outputFolder: 'e2e/report/playwright', open: 'never' }],
     cucumberReporter('html', { outputFile: 'e2e/report/cucumber.html' }),
     [
