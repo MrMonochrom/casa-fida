@@ -1,5 +1,6 @@
 # Checks every pull request (and every change to main): lint, type check and build, and all the
-# tests, including the API tests against a real MySQL like the one `npm run db:start` runs.
+# tests, including the API tests against a real MySQL like the one `npm run db:start` runs. The
+# browser tests (e2e/) run alongside, in their own job.
 name: CI
 
 on:
@@ -55,3 +56,61 @@ jobs:
 
       - name: Tests
         run: npm test
+
+  # The scenarios in e2e/features, in a real browser against the app and a fresh MySQL.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-only-password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      # The browser tests create their own casa_fida_e2e database here.
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ci-only-password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        run: npm run test:e2e
+
+      - name: Allure report
+        if: ${{ !cancelled() }}
+        run: npx allure generate
+
+      # The reports, with a recording of each failed scenario: download them from the run's page.
+      # The Allure report is one file: e2e/allure-report/index.html.
+      - name: Keep the reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            e2e/report
+            e2e/allure-report
+            e2e/results
+          retention-days: 14

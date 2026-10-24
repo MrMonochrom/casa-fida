@@ -9,8 +9,9 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     // The API server (server/index.ts) runs separately; forwarding /api keeps cookies same-origin.
+    // The browser tests (e2e/) run their own API server elsewhere and say where in API_URL.
     proxy: {
-      '/api': 'http://127.0.0.1:3002',
+      '/api': process.env.API_URL || 'http://127.0.0.1:3002',
     },
     // The coverage report is written into the project; don't reload the page when it changes.
     watch: {
