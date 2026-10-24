@@ -26,5 +26,14 @@ dist-ssr
 # Test coverage report
 coverage
 
+# Browser tests: generated test files, results, reports and the emails the test server wrote
+e2e/.features-gen
+e2e/.mail
+e2e/results
+e2e/report
+e2e/allure-results
+e2e/allure-report
+e2e/allure-history.jsonl
+
 # Production settings (see .env.example)
 .env

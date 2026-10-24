@@ -90,6 +90,10 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 | `npm test` | Runs all tests once (see [Tests](#tests)) |
 | `npm run test:watch` | Re-runs tests as you change files |
 | `npm run test:coverage` | Runs all tests and reports how much of the code they cover |
+| `npm run test:e2e` | Runs the browser tests: every scenario in `e2e/features`, in Chromium (see [Browser tests](#browser-tests)) |
+| `npm run test:e2e:chrome` | Runs the same scenarios in the full Google Chrome for Testing browser |
+| `npm run test:e2e:report` | Opens Playwright's report of the last browser test run, with a recording of each failed scenario |
+| `npm run test:e2e:allure` | Makes the Allure report of the last browser test run and opens it |
 | `npm run db:start` / `db:stop` / `db:status` | Starts, stops or checks the local MySQL (port 3307) |
 | `npm run db:users` | Prints every account, with builders' businesses and trades |
 | `npm run db:shell` | Opens a MySQL prompt on the `casa_fida` database |
@@ -131,6 +135,10 @@ server/                    API server (TypeScript, run directly by Node)
 shared/                    Used by both the app and the server: limits, trades, languages, currencies and money formatting
 db/                        schema.sql, seed.sql, migrations/ for older databases, and mysql.sh to run MySQL
                            without installing it
+e2e/                       Browser tests
+  features/                The scenarios, in Gherkin: one file per part of the app
+  steps/                   What each line of a scenario does in the browser
+  support/                 The test server and its database, reading emails, finding things on the page
 ```
 
 Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx`, and `billing.api.test.ts` tests `billing.ts`.
@@ -151,7 +159,40 @@ npx vitest run server/routes/billing.api.test.ts
 
 The **api** tests need MySQL running (`npm run db:start`). They never touch your data: each run creates a separate `casa_fida_test` database and deletes it afterwards.
 
-On GitHub, every pull request (and every change to `main`) runs lint, the type check and build, and all the tests against a fresh MySQL: see [.github/workflows/ci.yml](.github/workflows/ci.yml).
+On GitHub, every pull request (and every change to `main`) runs lint, the type check and build, and all the tests against a fresh MySQL, with the browser tests alongside in a second job: see [.github/workflows/ci.yml](.github/workflows/ci.yml). The browser tests' reports can be downloaded from the run's page.
+
+### Browser tests
+
+The scenarios in [e2e/features](e2e/features) use the whole app the way people do, in a real browser: signing up and confirming an email address, passwords, finding builders, posting jobs, quoting and hiring, proposals and invites, stages, photo updates, change orders, invoices, reviews, messages, live updates, plans, currencies, the three languages and phone screens. They're written in Gherkin, the language of Cucumber, and run by Playwright through [playwright-bdd](https://vitalets.github.io/playwright-bdd/):
+
+```gherkin
+Scenario: Approving a change order
+  Given I am logged in as Emma
+  When I open the project "Rear extension & open-plan kitchen"
+  And I open the tab "Changes & invoices"
+  And I click "Approve" on the change order "Add a skylight over the kitchen"
+  And I confirm with "Approve change"
+  Then the "Total price" is "$154,550"
+  And Marcus gets an email "Change approved: Add a skylight over the kitchen"
+```
+
+```sh
+npx playwright install chromium            # once, to download the browser
+npm run test:e2e                           # all 130 scenarios, about 2 minutes
+npm run test:e2e:chrome                    # the same, in the full Chrome for Testing browser
+npm run test:e2e -- --grep "change order"  # the scenarios whose name matches
+npm run test:e2e -- --headed               # watch them happen
+npm run test:e2e:allure                    # the last run's Allure report
+npm run test:e2e:report                    # the last run's Playwright report
+```
+
+The **Allure report** groups the scenarios by feature and shows each step with what it did in the browser. A failed scenario has its screenshot and a recording (trace) to step through. Each report adds its run to a history kept on your computer, so later reports show trends and scenarios that pass only sometimes. The report is a single file, `e2e/allure-report/index.html`; on GitHub it comes with the other reports from each run.
+
+They need MySQL running (`npm run db:start`), and start their own copy of the app on other ports (web 5184, API 3102), so `npm run dev` can keep running. That copy has its own database, `casa_fida_e2e`, with the [test accounts](#test-accounts) loaded fresh before every scenario, and writes each email it sends to `e2e/.mail`, so scenarios can open the links in them.
+
+Scenarios call the test accounts by their first name. A scenario can follow two people, each in their own browser ("When I switch to Marcus's browser"), which is how live updates are checked.
+
+To add a scenario, write it with lines the other scenarios already use (their steps are in [e2e/steps](e2e/steps)), or add a step there: `npm run test:e2e` lists any line that has no step yet. Each run also writes a Cucumber report to `e2e/report/cucumber.html`.
 
 ## Running in production
 
@@ -165,6 +206,7 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 | `TRUST_PROXY` | How many proxies sit in front, so login limits see real addresses (`true` counts as 1) | off |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | The MySQL database | `127.0.0.1`, `3307`, `root`, empty, `casa_fida` |
 | `SMTP_URL`, `MAIL_FROM` | Sending email. Without `SMTP_URL`, emails are only printed in the server's log. | not set |
+| `MAIL_DIR` | Without `SMTP_URL`, also writes each email to this folder as a file (the browser tests read them there) | not set |
 
 ## Limitations and next steps
 
@@ -178,4 +220,4 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 
 ## Tech stack
 
-React 19, TypeScript 6, Vite 8, Express 5, mysql2, MySQL 8.4 and oxlint. Tests use Vitest, Testing Library (with jsdom) and supertest.
+React 19, TypeScript 6, Vite 8, Express 5, mysql2, MySQL 8.4 and oxlint. Tests use Vitest, Testing Library (with jsdom) and supertest. The browser tests use Playwright and playwright-bdd, with scenarios in Gherkin as in Cucumber, and Allure 3 for their report.
