@@ -25,6 +25,7 @@ export interface ProjectRow extends RowDataPacket {
   status: ProjectStatus
   job_id: number | null
   invite_token_hash: string | null
+  invite_emailed: number
   created_at: number
   accepted_at: number | null
   completed_at: number | null

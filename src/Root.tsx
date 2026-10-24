@@ -35,7 +35,11 @@ export function Root() {
     setUser(null)
   }, [])
 
-  const showClaimed = useCallback((projectId: number) => navigate(`/projects/${projectId}`, { replace: true }), [])
+  const showClaimed = useCallback((projectId: number) => {
+    navigate(`/projects/${projectId}`, { replace: true })
+    // Opening the invite from a proposal email to your own address confirms it, which hides the banner.
+    api.me().then((fresh) => fresh && setUser(fresh), () => {})
+  }, [])
 
   if (user === undefined) {
     return (
