@@ -259,10 +259,11 @@ jobRoutes.put('/jobs/:id', requireRole('client'), async (req, res) => {
   if (input.currency !== job.currency && Number(job.quote_count) > 0) {
     return fail(res, 409, (m) => m.jobs.currencyLocked)
   }
-  await db.execute(
+  // Only while it's open, checked as it's saved: a builder may have been hired a moment ago.
+  const [result] = await db.execute<ResultSetHeader>(
     `UPDATE jobs SET title = ?, description = ?, trade = ?, location = ?, currency = ?, budget_min = ?, budget_max = ?,
                      timing = ?
-     WHERE id = ?`,
+     WHERE id = ? AND status = 'open'`,
     [
       input.title,
       input.description,
@@ -275,6 +276,7 @@ jobRoutes.put('/jobs/:id', requireRole('client'), async (req, res) => {
       job.id,
     ],
   )
+  if (result.affectedRows === 0) throw conflict((m) => m.jobs.onlyOpenChange)
   for (const builderId of await quotingBuilders(job.id)) publish(builderId, { type: 'job', jobId: job.id })
   res.json({ job: toJob((await loadJob(job.id))!, false) })
 })
@@ -285,7 +287,12 @@ jobRoutes.post('/jobs/:id/close', requireRole('client'), async (req, res) => {
   if (job.status !== 'open') return fail(res, 409, (m) => m.jobs.alreadyClosed)
   const builders = await quotingBuilders(job.id)
   await inTransaction(async (conn) => {
-    await conn.execute("UPDATE jobs SET status = 'closed' WHERE id = ?", [job.id])
+    // Only while it's open: a builder may have been hired a moment ago, in another window.
+    const [closed] = await conn.execute<ResultSetHeader>(
+      "UPDATE jobs SET status = 'closed' WHERE id = ? AND status = 'open'",
+      [job.id],
+    )
+    if (closed.affectedRows === 0) throw conflict((m) => m.jobs.alreadyTaken)
     await conn.execute("UPDATE quotes SET status = 'declined' WHERE job_id = ? AND status = 'pending'", [job.id])
   })
   for (const builderId of builders) publish(builderId, { type: 'job', jobId: job.id })
@@ -400,11 +407,29 @@ jobRoutes.put('/jobs/:id/quote', requireRole('builder'), async (req, res) => {
     const wait = limits.newQuotesPerBuilderPerDay.retryAfter(key, max)
     if (wait) return tooManyAttempts(res, wait)
   }
-  await db.execute(
-    `INSERT INTO quotes (job_id, builder_id, amount, weeks, message) VALUES (?, ?, ?, ?, ?) AS new
-     ON DUPLICATE KEY UPDATE amount = new.amount, weeks = new.weeks, message = new.message, status = 'pending'`,
-    [job.id, builder.id, input.amount, input.weeks, input.message],
-  )
+  await inTransaction(async (conn) => {
+    // What the client can change is checked again as the quote is saved, with the job and then the
+    // quote locked (the order accepting a quote locks them in): since the checks above, they may
+    // have closed the job, hired someone, changed its currency or declined this quote.
+    const [jobs] = await conn.execute<RowDataPacket[]>(
+      'SELECT status, currency FROM jobs WHERE id = ? FOR UPDATE',
+      [job.id],
+    )
+    if (jobs[0]?.status !== 'open') throw notFound(JOB_GONE)
+    if (req.body?.currency !== undefined && req.body.currency !== jobs[0].currency) {
+      throw conflict((m) => m.quotes.currencyChanged)
+    }
+    const [quotes] = await conn.execute<RowDataPacket[]>(
+      'SELECT status FROM quotes WHERE job_id = ? AND builder_id = ? FOR UPDATE',
+      [job.id, builder.id],
+    )
+    if (quotes[0]?.status === 'declined') throw conflict((m) => m.quotes.declined)
+    await conn.execute(
+      `INSERT INTO quotes (job_id, builder_id, amount, weeks, message) VALUES (?, ?, ?, ?, ?) AS new
+       ON DUPLICATE KEY UPDATE amount = new.amount, weeks = new.weeks, message = new.message, status = 'pending'`,
+      [job.id, builder.id, input.amount, input.weeks, input.message],
+    )
+  })
   publish(job.client_id, { type: 'job', jobId: job.id })
   const quote = (await myQuoteOn(job.id, builder.id))!
   if (isNew) {
@@ -425,8 +450,12 @@ jobRoutes.delete('/jobs/:id/quote', requireRole('builder'), async (req, res) => 
   const jobId = idFrom(req.params.id)
   const quote = jobId ? await myQuoteOn(jobId, builder.id) : null
   if (!quote || quote.status === 'withdrawn') return fail(res, 404, QUOTE_GONE)
-  if (quote.status !== 'pending') return fail(res, 409, (m) => m.quotes.alreadyAnswered)
-  await db.execute("UPDATE quotes SET status = 'withdrawn' WHERE id = ?", [quote.id])
+  // Only while it's waiting for an answer, checked as it's saved: the client may have just answered.
+  const [result] = await db.execute<ResultSetHeader>(
+    "UPDATE quotes SET status = 'withdrawn' WHERE id = ? AND status = 'pending'",
+    [quote.id],
+  )
+  if (result.affectedRows === 0) throw conflict((m) => m.quotes.alreadyAnswered)
   const job = (await loadJob(jobId))!
   publish(job.client_id, { type: 'job', jobId: job.id })
   res.status(204).end()
@@ -489,8 +518,13 @@ jobRoutes.post('/quotes/:id/accept', requireRole('client'), async (req, res) => 
 // Turns a quote down. The job stays open for other quotes.
 jobRoutes.post('/quotes/:id/decline', requireRole('client'), async (req, res) => {
   const { quote } = await quoteForClient(req, res)
-  if (quote.status !== 'pending') return fail(res, 409, (m) => m.quotes.noLongerPending)
-  await db.execute("UPDATE quotes SET status = 'declined' WHERE id = ?", [quote.id])
+  // Only while it's waiting for an answer, checked as it's saved: it may have been accepted a
+  // moment ago, in another window.
+  const [result] = await db.execute<ResultSetHeader>(
+    "UPDATE quotes SET status = 'declined' WHERE id = ? AND status = 'pending'",
+    [quote.id],
+  )
+  if (result.affectedRows === 0) throw conflict((m) => m.quotes.noLongerPending)
   publish(quote.builder_id, { type: 'job', jobId: quote.job_id })
   res.json({ quote: toQuote((await loadQuote(quote.id))!) })
 })

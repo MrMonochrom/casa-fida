@@ -458,7 +458,7 @@ export const en = {
     declineProposal: 'Decline proposal',
     completeTitle: 'Mark the project as completed?',
     completeText:
-      'All stages are marked done, and your client is asked to leave a review. You can still send invoices for anything not billed yet.',
+      'All stages are marked done, change orders still waiting for an answer are withdrawn, and your client is asked to leave a review. You can still send invoices for anything not billed yet.',
     withdrawTitle: 'Withdraw this proposal?',
     removeTitle: 'Remove this proposal?',
     withdrawText: "It's deleted, and your client can't accept it any more.",

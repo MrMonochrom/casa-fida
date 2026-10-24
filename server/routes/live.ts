@@ -3,6 +3,7 @@ import type { RowDataPacket } from 'mysql2/promise'
 import { hashToken } from '../auth.ts'
 import { db } from '../db.ts'
 import { MAX_STREAMS_PER_USER, streamCount, subscribe } from '../events.ts'
+import { WAITING_ON_CLIENT } from '../projects.ts'
 import { currentUser, me, requireUser, sessionToken } from '../session.ts'
 import { tradeCovered } from '../users.ts'
 import { fail } from '../validate.ts'
@@ -58,11 +59,7 @@ liveRoutes.get('/summary', requireUser, async (_req, res) => {
       ? `SELECT
            (SELECT COUNT(*) FROM messages m JOIN conversations c ON c.id = m.conversation_id
             WHERE c.${column} = ? AND m.sender_id <> ? AND m.read_at IS NULL) AS unread_messages,
-           (SELECT COUNT(*) FROM projects WHERE client_id = ? AND status = 'proposed')
-           + (SELECT COUNT(*) FROM change_orders c JOIN projects p ON p.id = c.project_id
-              WHERE p.client_id = ? AND p.status = 'active' AND c.status = 'pending')
-           + (SELECT COUNT(*) FROM invoices i JOIN projects p ON p.id = i.project_id
-              WHERE p.client_id = ? AND i.status = 'due') AS projects,
+           (SELECT COALESCE(SUM(${WAITING_ON_CLIENT}), 0) FROM projects p WHERE p.client_id = ?) AS projects,
            (SELECT COUNT(*) FROM quotes q JOIN jobs j ON j.id = q.job_id
             WHERE j.client_id = ? AND j.status = 'open' AND q.status = 'pending') AS jobs`
       : `SELECT
@@ -74,7 +71,7 @@ liveRoutes.get('/summary', requireUser, async (_req, res) => {
               AND j.trade IN (SELECT t.trade FROM builder_trades t JOIN users b ON b.id = t.user_id
                               WHERE t.user_id = ? AND ${tradeCovered('t.', 'b.')})
               AND NOT EXISTS (SELECT 1 FROM quotes q WHERE q.job_id = j.id AND q.builder_id = ?)) AS jobs`,
-    user.role === 'client' ? Array(6).fill(user.id) : Array(4).fill(user.id),
+    Array(4).fill(user.id),
   )
   res.json({
     unreadMessages: Number(rows[0].unread_messages),

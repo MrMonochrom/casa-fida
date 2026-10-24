@@ -495,7 +495,7 @@ export const ro: Messages = {
     declineProposal: 'Refuză propunerea',
     completeTitle: 'Marcați proiectul ca finalizat?',
     completeText:
-      'Toate etapele vor fi marcate ca gata, iar clientului i se va cere o recenzie. Puteți trimite în continuare facturi pentru ce nu a fost încă facturat.',
+      'Toate etapele vor fi marcate ca gata, modificările care încă așteaptă un răspuns vor fi retrase, iar clientului i se va cere o recenzie. Puteți trimite în continuare facturi pentru ce nu a fost încă facturat.',
     withdrawTitle: 'Retrageți această propunere?',
     removeTitle: 'Eliminați această propunere?',
     withdrawText: 'Va fi ștearsă, iar clientul nu o va mai putea accepta.',

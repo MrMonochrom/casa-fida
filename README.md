@@ -27,6 +27,7 @@ npm run db:shell < db/migrations/003-password-reset-and-notifications.sql
 npm run db:shell < db/migrations/004-builder-plans.sql
 npm run db:shell < db/migrations/005-emailed-invite-links.sql
 npm run db:shell < db/migrations/006-trade-order.sql
+npm run db:shell < db/migrations/007-completed-change-orders.sql   # change orders left waiting on completed projects are withdrawn
 ```
 
 Without `SMTP_URL`, emails (like the link that confirms a new account's email address) are printed in the terminal running `npm run dev`.
@@ -146,7 +147,7 @@ Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx
 ## Tests
 
 ```sh
-npm test                 # all 540 tests
+npm test                 # all 556 tests
 npx vitest run --project web
 npx vitest run server/routes/billing.api.test.ts
 ```
