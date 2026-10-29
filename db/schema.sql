@@ -1,7 +1,7 @@
 -- Casa Fida database. Load with: mysql -uroot < db/schema.sql
 -- Every amount of money is in whole cents (or euro cents, bani, kopecks), in the currency of the
 -- job or project it belongs to. The currencies are listed in shared/money.ts (CURRENCIES).
--- An older database is brought up to date by the files in db/migrations, in order.
+-- An older database is brought up to date by the files in db/migrations: npm run db:migrate.
 
 CREATE DATABASE IF NOT EXISTS casa_fida CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE casa_fida;
@@ -175,13 +175,13 @@ CREATE TABLE updates (
   FOREIGN KEY (stage_id) REFERENCES stages (id) ON DELETE SET NULL
 );
 
--- Photos on an update, as JPEGs. A hosted app would keep these in file storage instead.
+-- Photos on an update, as JPEGs. The files are in file storage (see server/storage.ts), under storage_key.
 CREATE TABLE update_photos (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   update_id INT UNSIGNED NOT NULL,
   position INT NOT NULL DEFAULT 0,
   mime_type VARCHAR(40) NOT NULL,
-  data MEDIUMBLOB NOT NULL,
+  storage_key VARCHAR(255) NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX (update_id, position),
   FOREIGN KEY (update_id) REFERENCES updates (id) ON DELETE CASCADE
@@ -259,3 +259,23 @@ CREATE TABLE messages (
   FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE,
   FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE CASCADE
 );
+
+-- Which files in db/migrations this database has had, so `npm run db:migrate` runs each one once
+-- (see server/migrate.ts). The tables above already have every change they make, so a new database
+-- starts with all of them listed. Add each new migration here too.
+CREATE TABLE schema_migrations (
+  name VARCHAR(100) PRIMARY KEY,
+  applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO schema_migrations (name) VALUES
+  ('001-currencies.sql'),
+  ('002-email-verification.sql'),
+  ('003-password-reset-and-notifications.sql'),
+  ('004-builder-plans.sql'),
+  ('005-emailed-invite-links.sql'),
+  ('006-trade-order.sql'),
+  ('007-completed-change-orders.sql'),
+  ('008-photo-file-storage.sql'),
+  ('009-photos-to-file-storage.ts'),
+  ('010-photos-out-of-mysql.sql');

@@ -6,31 +6,21 @@ The front end is React + TypeScript (Vite). A Node.js/Express API server keeps e
 
 ## Quick start
 
-You need **Node.js 24 or newer** and a **Mac with Apple silicon**: the database script downloads MySQL for that platform. On anything else, load `db/schema.sql` and `db/seed.sql` into your own MySQL 8 and see [Running in production](#running-in-production) for the connection settings.
+You need **Node.js 24 or newer**, and either a **Mac with Apple silicon** or **Docker** (Docker Desktop, or Docker Engine on Linux). On a Mac with Apple silicon, the database script downloads MySQL and runs it from your home folder; everywhere else (Linux, Intel Macs, Windows with WSL) it runs MySQL in Docker. Set `CASA_FIDA_MYSQL=docker` to use Docker on an Apple silicon Mac too.
 
 ```sh
 npm install
-npm run db:start   # first run downloads MySQL (about 165 MB) and loads the sample data
+npm run db:start   # the first run downloads MySQL and loads the sample data
 npm run dev        # starts the web app and the API server together
 ```
 
 Open http://localhost:5174 and log in with a [test account](#test-accounts), or sign up.
 
-MySQL doesn't start by itself after a reboot, so run `npm run db:start` before `npm run dev`.
+The downloaded MySQL doesn't start by itself after a reboot, so run `npm run db:start` before `npm run dev`. (In Docker, it starts with Docker.)
 
-If your database was made before currencies or email confirmation were added, bring it up to date by running each file in [db/migrations](db/migrations) you haven't run yet, in order, once:
+`npm run db:start` also brings an older database up to date: it runs each file in [db/migrations](db/migrations) the database hasn't had yet, in order, and records it in the `schema_migrations` table so it never runs twice. `npm run db:migrate` does just that. Databases from before migrations were recorded are recognized by the columns each migration added. To change the tables, add the next numbered file there (`.sql`, or `.ts` for changes SQL can't make), make the same change in [db/schema.sql](db/schema.sql), and add the file to the list at its end.
 
-```sh
-npm run db:shell < db/migrations/001-currencies.sql           # existing jobs and projects stay in US dollars
-npm run db:shell < db/migrations/002-email-verification.sql   # existing accounts count as confirmed
-npm run db:shell < db/migrations/003-password-reset-and-notifications.sql
-npm run db:shell < db/migrations/004-builder-plans.sql
-npm run db:shell < db/migrations/005-emailed-invite-links.sql
-npm run db:shell < db/migrations/006-trade-order.sql
-npm run db:shell < db/migrations/007-completed-change-orders.sql   # change orders left waiting on completed projects are withdrawn
-```
-
-Without `SMTP_URL`, emails (like the link that confirms a new account's email address) are printed in the terminal running `npm run dev`.
+Without `SMTP_URL`, emails (like the link that confirms a new account's email address) are printed in the terminal running `npm run dev`. Without `S3_BUCKET`, photos are kept in `~/.casa-fida/files`.
 
 ## Test accounts
 
@@ -95,19 +85,29 @@ To see both sides at once, log in as Emma in one window and Marcus in a private 
 | `npm run test:e2e:chrome` | Runs the same scenarios in the full Google Chrome for Testing browser |
 | `npm run test:e2e:report` | Opens Playwright's report of the last browser test run, with a recording of each failed scenario |
 | `npm run test:e2e:allure` | Makes the Allure report of the last browser test run and opens it |
-| `npm run db:start` / `db:stop` / `db:status` | Starts, stops or checks the local MySQL (port 3307) |
+| `npm run test:deploy` | Checks the Docker setup end to end on this computer (see [Checking it all works](#checking-it-all-works)) |
+| `npm run db:start` / `db:stop` / `db:status` | Starts (and brings up to date), stops or checks the local MySQL (port 3307) |
+| `npm run db:migrate` | Runs the [migrations](db/migrations) the database hasn't had yet |
 | `npm run db:users` | Prints every account, with builders' businesses and trades |
 | `npm run db:shell` | Opens a MySQL prompt on the `casa_fida` database |
-| `npm run db:reset` | Deletes all data and reloads the sample data (asks first) |
+| `npm run db:reset` | Deletes all data and photos and reloads the sample data (asks first) |
 | `npm run plan -- <email> pro [days]` | Puts a builder on Pro (for that many days, or with no end), or `free` to go back |
 
 ## How it fits together
 
 ```
 Browser ──▶ Vite dev server (:5174) ──/api──▶ API server (:3002) ──▶ MySQL (:3307)
+                                                     └──────────────▶ photos: ~/.casa-fida/files, or a bucket
 ```
 
-The Vite dev server serves the React app and forwards every `/api` request to the API server, so the browser only talks to one address and the login cookie just works. In production, the API server serves the built app itself.
+The Vite dev server serves the React app and forwards every `/api` request to the API server, so the browser only talks to one address and the login cookie just works. In production, the API server serves the built app itself, behind Caddy:
+
+```
+Browser ──HTTPS──▶ Caddy (:443) ──▶ app (:3002) ──▶ MySQL
+                                        └─────────▶ bucket (R2, B2, Spaces…): photos, and nightly backups of MySQL
+```
+
+Photos are kept in file storage ([server/storage.ts](server/storage.ts)): a bucket on an S3-compatible service when `S3_BUCKET` is set, otherwise a folder. The bucket stays private; the app gets each photo from the API server, which checks that it's one of the two people on the project.
 
 Live updates use server-sent events (`GET /api/events`). The app keeps one connection open and reloads whatever an event is about. Open chats and the menu counts also check now and then, in case events can't get through.
 
@@ -130,12 +130,18 @@ src/                       React app
   test/                    Test setup, sample data and the mocked API
 server/                    API server (TypeScript, run directly by Node)
   app.ts                   Routes, error handling, and serving the built app in production
+  storage.ts               Where photos are kept: a bucket, or a folder
+  migrate.ts               Brings the database up to date (npm run db:migrate)
+  errorTracking.ts         Sends errors to Sentry, when it's set up
   i18n/                    Every error message and email the server sends, in each language
   routes/                  account, builders, jobs (and quotes), projects, work (stages, updates,
                            photos), billing (change orders, invoices), messages, live
 shared/                    Used by both the app and the server: limits, trades, languages, currencies and money formatting
 db/                        schema.sql, seed.sql, migrations/ for older databases, and mysql.sh to run MySQL
                            without installing it
+Dockerfile                 The app in one image
+docker-compose.yml         The app, MySQL, Caddy and nightly backups, on one server
+deploy/                    Caddy's settings, the backup service, and the end-to-end check of all of it
 e2e/                       Browser tests
   features/                The scenarios, in Gherkin: one file per part of the app
   steps/                   What each line of a scenario does in the browser
@@ -147,7 +153,7 @@ Tests sit next to the code they check: `ClientJob.test.tsx` tests `ClientJob.tsx
 ## Tests
 
 ```sh
-npm test                 # all 556 tests
+npm test                 # all 587 tests
 npx vitest run --project web
 npx vitest run server/routes/billing.api.test.ts
 ```
@@ -197,7 +203,89 @@ To add a scenario, write it with lines the other scenarios already use (their st
 
 ## Running in production
 
-Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` and fill it in, then start the server with `node --env-file=.env server/index.ts`. It serves the app and the API from one port, with security headers and secure cookies, so put it behind a proxy that handles HTTPS (like Caddy).
+Everything runs on one Linux server with Docker, from [docker-compose.yml](docker-compose.yml): the app, its MySQL database, [Caddy](https://caddyserver.com) in front for HTTPS (it gets and renews the certificate by itself), and a backup of the database every night. Nothing that matters lives only on the server: photos are in a bucket on an S3-compatible file storage service, and so are the backups, so a new server can take over from a lost one.
+
+### A new server
+
+You need:
+
+- **A Linux server** with ports 80 and 443 open. 2 GB of memory is enough (building the image needs most of it). Install Docker with `curl -fsSL https://get.docker.com | sh`.
+- **A domain name** (or subdomain) whose DNS points at the server.
+- **A bucket** and an access key that can read, write and delete in it, on [Cloudflare R2](https://developers.cloudflare.com/r2/), [Backblaze B2](https://www.backblaze.com/cloud-storage) or [DigitalOcean Spaces](https://www.digitalocean.com/products/spaces) (or Amazon S3). Keep it private.
+- Optionally, an SMTP service for email and a [Sentry](https://sentry.io) project for errors.
+
+Then, on the server:
+
+```sh
+git clone https://github.com/MrMonochrom/buildbridge.git casa-fida && cd casa-fida
+cp .env.example .env    # fill it in: the domain, two passwords, the bucket, email, Sentry
+docker compose up -d
+```
+
+(While the repository is private, the server needs a [deploy key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys) to clone it: then use `git@github.com:MrMonochrom/buildbridge.git`.)
+
+The first start builds the image (a few minutes), makes the database's tables, gets the HTTPS certificate and makes the first backup. The app is then on `https://<DOMAIN>`. Each time the app starts, it brings the database up to date ([migrations](db/migrations)).
+
+To update to the newest code later, run `deploy/update.sh`: it backs up the database, pulls, rebuilds and swaps the new version in. `docker compose logs -f app` shows the app's log, and its warnings about anything not set up.
+
+### Backups
+
+The backup service dumps the database every night at `BACKUP_TIME` (03:00 UTC by default) into the bucket under `backups/`, as `casa_fida-<date and time>.sql.gz`, and removes the ones more than `BACKUP_KEEP_DAYS` (30) days old. It makes one straight away when it starts if the newest is more than a day old. Photos aren't in the backups: they're in the bucket already.
+
+```sh
+docker compose run --rm backup now               # a backup straight away
+docker compose run --rm backup list              # the backups there are
+docker compose run --rm backup check             # loads the newest into a scratch database and compares it with the real one
+docker compose run --rm backup restore <name>    # replaces the database with that backup (or "latest"); asks first
+```
+
+`check` is the restore test: it shows each table's rows in the backup next to the live database's. Run it after setting up a server, and now and then.
+
+**When a server is lost**, set up a new one as above with the same `.env` (the same bucket), then:
+
+```sh
+docker compose up -d
+docker compose stop app
+docker compose run --rm backup restore latest
+docker compose start app
+```
+
+`restore` backs up whatever is in the database first, so nothing is lost by restoring the wrong one.
+
+### Error tracking and uptime
+
+With `SENTRY_DSN` set, errors in the server (failed requests, emails that didn't send, the hourly checks) and in people's browsers go to Sentry, which groups them and emails you about new ones. They carry no cookies, headers, request bodies, query strings (links from emails have tokens there) or local variables. `SENTRY_ENVIRONMENT` tells staging's errors apart from production's, and each one says which commit was running.
+
+Two monitors to set up once the app is running, both in Sentry (or Better Stack, UptimeRobot, Healthchecks.io…):
+
+- **Uptime**: an uptime monitor on `https://<DOMAIN>/api/health`, every minute. It answers `200 {"ok":true}` while the app can reach its database, and `503` when it can't.
+- **Backups**: a cron monitor that expects a check-in every day. Put its check-in URL (Sentry shows it in the monitor's instructions for cURL) in `BACKUP_PING_URL`, and you hear about it when a backup doesn't happen.
+
+### Staging
+
+A staging copy is a second server set up the same way, with its own subdomain (like `staging.casafida.example.com`), its own bucket (backups and photos never mix with production's), `SENTRY_ENVIRONMENT=staging`, and its own passwords. To try it with the [test accounts](#test-accounts), load the sample data once:
+
+```sh
+docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" casa_fida' < db/seed.sql
+```
+
+Leave `SMTP_URL` empty on staging unless you mean it to email people: the emails are then only in its log (`docker compose logs app`).
+
+### Checking it all works
+
+`npm run test:deploy` ([deploy/smoke-test.sh](deploy/smoke-test.sh)) runs the whole of docker-compose.yml on your computer, with a local S3-compatible server standing in for the bucket and Caddy on https://localhost:8443, and checks that:
+
+1. everything starts from nothing with one command, and answers over HTTPS;
+2. a photo goes to the bucket (not MySQL) and loads from it;
+3. live updates get through Caddy;
+4. backups go to the bucket, old ones are removed, and the restore check passes;
+5. after the server "dies" (the app, MySQL and their volumes are deleted), a new one gets the backup restored and the same photo still loads.
+
+It needs Docker, and takes a few minutes. It uses its own Docker project and port, so it touches nothing else.
+
+### Without Docker
+
+Build the app with `npm run build`, bring the database up to date with `npm run db:migrate` (an empty database gets its tables), then start the server with `node --env-file=.env server/index.ts`. It serves the app and the API from one port, with security headers and secure cookies, so put it behind a proxy that handles HTTPS (like Caddy). The settings, which docker-compose.yml fills in from `.env`:
 
 | Setting | What it's for | Default |
 |---|---|---|
@@ -206,8 +294,12 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 | `PORT`, `HOST` | Where the server listens | `3002`, `127.0.0.1` |
 | `TRUST_PROXY` | How many proxies sit in front, so login limits see real addresses (`true` counts as 1) | off |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | The MySQL database | `127.0.0.1`, `3307`, `root`, empty, `casa_fida` |
+| `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | The bucket photos are kept in (see [.env.example](.env.example) for each service's endpoint) | not set |
+| `STORAGE_DIR` | Without `S3_BUCKET`, the folder photos are kept in | `~/.casa-fida/files` |
 | `SMTP_URL`, `MAIL_FROM` | Sending email. Without `SMTP_URL`, emails are only printed in the server's log. | not set |
 | `MAIL_DIR` | Without `SMTP_URL`, also writes each email to this folder as a file (the browser tests read them there) | not set |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | Sending errors to Sentry, and which copy of the app they're from | not set, `NODE_ENV` |
+| `APP_VERSION` | Which version is running, for error reports (the Docker image is given its commit) | not set |
 
 ## Limitations and next steps
 
@@ -217,7 +309,7 @@ Build the app with `npm run build`, copy [.env.example](.env.example) to `.env` 
 | Email digests | Each notification is its own email; there's no daily summary. |
 | Files such as plans and contracts | Only photos, on project updates. |
 | Running several server processes | Live updates and login limits are kept in one process's memory. |
-| Photo storage | Photos are stored in MySQL. A hosted app would keep them in file storage instead. |
+| Readable browser errors | The built app's code is minified, so browser errors in Sentry point into minified code. Uploading source maps to Sentry while building would fix that. |
 
 ## Tech stack
 

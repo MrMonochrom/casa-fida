@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import mysql from 'mysql2/promise'
-import { TEST_DB, connectionOptions } from './testDb.ts'
+import { TEST_DB, TEST_FILES, connectionOptions } from './testDb.ts'
 
-/** Creates a fresh test database from db/schema.sql before the API tests, and drops it afterwards. */
+/** Creates a fresh test database from db/schema.sql before the API tests, and drops it afterwards, with their photos. */
 export default async function setup() {
   let conn: mysql.Connection
   try {
@@ -18,10 +18,12 @@ export default async function setup() {
   await conn.query(`DROP DATABASE IF EXISTS ${TEST_DB}`)
   await conn.query(schema)
   await conn.end()
+  rmSync(TEST_FILES, { recursive: true, force: true })
 
   return async () => {
     const cleanup = await mysql.createConnection(connectionOptions)
     await cleanup.query(`DROP DATABASE IF EXISTS ${TEST_DB}`)
     await cleanup.end()
+    rmSync(TEST_FILES, { recursive: true, force: true })
   }
 }

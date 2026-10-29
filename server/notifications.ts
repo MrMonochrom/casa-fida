@@ -3,6 +3,7 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { isLanguage } from '../shared/languages.ts'
 import type { Currency } from '../shared/money.ts'
 import { db } from './db.ts'
+import { reportError } from './errorTracking.ts'
 import { messagesIn } from './i18n/index.ts'
 import type { ServerMessages } from './i18n/index.ts'
 import { appUrl, sendEmail } from './mailer.ts'
@@ -25,7 +26,7 @@ const sending = new Set<Promise<void>>()
 /** Runs work after the request has its answer. Failures are logged; tests can wait for it. */
 function inBackground(work: () => Promise<void>) {
   const running: Promise<void> = work()
-    .catch((err) => console.error('Notification email failed:', err))
+    .catch((err) => reportError('Notification email failed', err))
     .finally(() => sending.delete(running))
   sending.add(running)
 }
@@ -165,8 +166,8 @@ const HOUR = 60 * 60 * 1000
 /** Checks for overdue invoices and daily job emails now and every hour. Started by index.ts, not in tests. */
 export function startReminders() {
   const check = () => {
-    sendOverdueReminders().catch((err) => console.error('Overdue reminders failed:', err))
-    sendJobDigests().catch((err) => console.error('Daily job emails failed:', err))
+    sendOverdueReminders().catch((err) => reportError('Overdue reminders failed', err))
+    sendJobDigests().catch((err) => reportError('Daily job emails failed', err))
   }
   setTimeout(check, 10_000)
   setInterval(check, HOUR)

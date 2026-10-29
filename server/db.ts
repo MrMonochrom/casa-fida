@@ -1,13 +1,19 @@
 import mysql from 'mysql2/promise'
 
-// Defaults match the local database started by `npm run db:start`.
-export const db = mysql.createPool({
+/** Where MySQL is and who to log in as. Defaults match the local database started by `npm run db:start`. */
+export const connectionSettings = {
   // || rather than ??: an empty setting (as Docker Compose passes for unset ones) counts as unset.
   host: process.env.DB_HOST || '127.0.0.1',
   port: Number(process.env.DB_PORT || 3307),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'casa_fida',
+}
+
+export const databaseName = process.env.DB_NAME || 'casa_fida'
+
+export const db = mysql.createPool({
+  ...connectionSettings,
+  database: databaseName,
   charset: 'utf8mb4',
   // Return DATE columns as 'YYYY-MM-DD' strings instead of timezone-shifted Date objects.
   dateStrings: true,

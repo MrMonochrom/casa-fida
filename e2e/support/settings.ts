@@ -10,6 +10,9 @@ export const WEB_URL = `http://localhost:${WEB_PORT}`
 /** Rebuilt from db/schema.sql when the tests start, and reloaded with db/seed.sql before each scenario. */
 export const E2E_DB = 'casa_fida_e2e'
 
+/** The test server keeps photos here (see STORAGE_DIR in server/storage.ts). Emptied when it starts. */
+export const FILES_DIR = fileURLToPath(new URL('../.files/', import.meta.url))
+
 /** The test server writes every email here (see MAIL_DIR in server/mailer.ts). */
 export const MAIL_DIR = fileURLToPath(new URL('../.mail/', import.meta.url))
 

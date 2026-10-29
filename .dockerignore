@@ -1,0 +1,20 @@
+# Left out of the Docker image's build: installed or made inside it, or never needed there.
+.git
+node_modules
+dist
+coverage
+e2e/.features-gen
+e2e/.mail
+e2e/.files
+e2e/results
+e2e/report
+e2e/allure-results
+e2e/allure-report
+e2e/allure-history.jsonl
+# Passwords stay on the server.
+.env
+.env.*
+!.env.example
+.vscode
+.idea
+**/.DS_Store

@@ -1,0 +1,6 @@
+# Caddy, in front of Casa Fida: HTTPS for DOMAIN with a certificate from Let's Encrypt that it
+# renews by itself, plain http:// sent on to https://, and responses compressed.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3002
+}

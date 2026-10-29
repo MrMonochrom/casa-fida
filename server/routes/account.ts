@@ -3,6 +3,7 @@ import type { ResultSetHeader } from 'mysql2/promise'
 import { NAME_MAX, ROLES } from '../../shared/rules.ts'
 import type { Role } from '../../shared/rules.ts'
 import { db } from '../db.ts'
+import { reportError } from '../errorTracking.ts'
 import { hashPassword, hashToken, verifyPassword } from '../auth.ts'
 import { closeStreams } from '../events.ts'
 import { chosenLanguage, languageOf } from '../i18n/index.ts'
@@ -60,7 +61,7 @@ accountRoutes.post('/signup', async (req, res) => {
   limits.signupsPerIp.hit(ip)
 
   await sendVerificationEmail({ id: userId, email: input.email }, languageOf(req)).catch((err) =>
-    console.error('Confirmation email failed:', err),
+    reportError('Confirmation email failed', err),
   )
   await startSession(res, userId)
   res.status(201).json({ user: await ownAccount((await loadUser(userId))!) })
@@ -178,7 +179,7 @@ accountRoutes.post('/password-reset', async (req, res) => {
 
   const [rows] = await db.execute<UserRow[]>('SELECT * FROM users WHERE email = ?', [email])
   if (rows[0]) {
-    await sendPasswordResetEmail(rows[0], languageOf(req)).catch((err) => console.error('Password reset email failed:', err))
+    await sendPasswordResetEmail(rows[0], languageOf(req)).catch((err) => reportError('Password reset email failed', err))
   }
   res.status(204).end()
 })

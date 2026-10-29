@@ -1,6 +1,6 @@
 # Checks every pull request (and every change to main): lint, type check and build, and all the
 # tests, including the API tests against a real MySQL like the one `npm run db:start` runs. The
-# browser tests (e2e/) run alongside, in their own job.
+# browser tests (e2e/) and the Docker setup (deploy/) are checked alongside, in jobs of their own.
 name: CI
 
 on:
@@ -114,3 +114,15 @@ jobs:
             e2e/allure-report
             e2e/results
           retention-days: 14
+
+  # docker-compose.yml end to end (deploy/smoke-test.sh): everything starts with one command, photos
+  # go to file storage, backups restore, and a new server takes over from a lost one.
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker setup, end to end
+        run: bash deploy/smoke-test.sh

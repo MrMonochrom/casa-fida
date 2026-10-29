@@ -1,5 +1,5 @@
 -- Brings a database made before email confirmation was added up to date.
--- Run once: npm run db:shell < db/migrations/002-email-verification.sql
+-- npm run db:migrate runs it once.
 -- (New databases don't need it: db/schema.sql already has these.)
 
 ALTER TABLE users

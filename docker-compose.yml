@@ -1,0 +1,118 @@
+# Casa Fida on one server: the app, its MySQL database, Caddy in front of it for HTTPS, and a
+# backup of the database to file storage every night. Copy .env.example to .env, fill it in, then:
+#   docker compose up -d
+# See "Running in production" in README.md.
+name: casa-fida
+
+# Each service keeps 30 MB of logs at most, so they don't fill the disk over the months.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+# Where photos and backups go: a bucket on an S3-compatible service (see .env.example).
+x-file-storage: &file-storage
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_REGION: ${S3_REGION:-auto}
+  S3_BUCKET: ${S3_BUCKET:-}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-}
+    restart: unless-stopped
+    # Passes Docker's stop signal on to the server, so it stops cleanly.
+    init: true
+    environment:
+      <<: *file-storage
+      APP_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      TRUST_PROXY: 1
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: casa_fida
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      DB_NAME: casa_fida
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+    volumes:
+      # Photos, only while S3_BUCKET isn't set.
+      - files:/data/files
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+
+  db:
+    image: mysql:8.4.13
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: casa_fida
+      MYSQL_USER: casa_fida
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+    command: --mysqlx=OFF
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    logging: *logging
+
+  # Gets a certificate for DOMAIN from Let's Encrypt (and renews it), and passes requests to the app.
+  caddy:
+    image: caddy:2.11.7
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    logging: *logging
+
+  # Backs up the database every night and keeps 30 days of backups (see deploy/backup.sh):
+  #   docker compose run --rm backup now | list | check | restore <name>
+  backup:
+    build:
+      context: .
+      dockerfile: deploy/backup.Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *file-storage
+      BACKUP_BUCKET: ${BACKUP_BUCKET:-}
+      BACKUP_TIME: ${BACKUP_TIME:-03:00}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+      BACKUP_PING_URL: ${BACKUP_PING_URL:-}
+      DB_HOST: db
+      DB_NAME: casa_fida
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env}
+    volumes:
+      # Backups, only while S3_BUCKET isn't set.
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  db:
+  files:
+  backups:
+  caddy-data:
+  caddy-config:
