@@ -64,3 +64,8 @@ export function closeStreams(userId: number, which: { session: string } | { exce
     if (ended) subscription.close()
   }
 }
+
+/** Ends every live update connection, when the server is stopping. The app reconnects to the next one. */
+export function closeAllStreams() {
+  for (const forUser of [...subscriptions.values()]) for (const subscription of [...forUser]) subscription.close()
+}

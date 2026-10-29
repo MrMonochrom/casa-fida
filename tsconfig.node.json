@@ -19,5 +19,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "vitest.config.ts", "server", "shared"]
+  "include": ["vite.config.ts", "vitest.config.ts", "server", "shared", "db/migrations"]
 }

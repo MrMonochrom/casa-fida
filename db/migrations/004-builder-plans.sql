@@ -1,5 +1,5 @@
 -- Brings a database made before builder plans were added up to date.
--- Run once: npm run db:shell < db/migrations/004-builder-plans.sql
+-- npm run db:migrate runs it once.
 -- (New databases don't need it: db/schema.sql already has these.)
 
 ALTER TABLE users

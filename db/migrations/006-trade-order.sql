@@ -1,5 +1,5 @@
 -- Brings a database made before builders' trades kept their order up to date.
--- Run once: npm run db:shell < db/migrations/006-trade-order.sql
+-- npm run db:migrate runs it once.
 -- (New databases don't need it: db/schema.sql already has it.)
 
 ALTER TABLE builder_trades ADD COLUMN position TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER trade;

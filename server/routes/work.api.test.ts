@@ -1,6 +1,11 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { RowDataPacket } from 'mysql2/promise'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { STAGES_MAX } from '../../shared/rules.ts'
+import { db } from '../db.ts'
 import { subscribe } from '../events.ts'
+import { storage } from '../storage.ts'
 import {
   FAKE_JPEG,
   activeProject,
@@ -12,6 +17,7 @@ import {
   resetDb,
 } from '../test/helpers.ts'
 import type { Person } from '../test/helpers.ts'
+import { TEST_FILES } from '../test/testDb.ts'
 
 beforeEach(resetDb)
 
@@ -285,6 +291,85 @@ describe('photos', () => {
     const res = await upload(bob, updateId)
     expect(res.status).toBe(409)
     expect(res.body.error).toBe('An update can have up to 6 photos.')
+  })
+
+  /** Where each of the update's photos is kept in file storage (a folder, in these tests). */
+  async function filesOf(updateId: number) {
+    const [rows] = await db.execute<RowDataPacket[]>('SELECT storage_key FROM update_photos WHERE update_id = ?', [updateId])
+    return rows.map((r) => join(TEST_FILES, r.storage_key as string))
+  }
+
+  it('keeps each photo in file storage, not in MySQL', async () => {
+    const { bob, updateId } = await postedUpdate()
+    await upload(bob, updateId)
+    const [file] = await filesOf(updateId)
+    expect(file).toMatch(new RegExp(`photos/${updateId}/[0-9a-f-]{36}\\.jpg$`))
+    expect(readFileSync(file)).toEqual(FAKE_JPEG)
+  })
+
+  it('removes the photo files when the update is deleted', async () => {
+    const { bob, updateId } = await postedUpdate()
+    await upload(bob, updateId)
+    await upload(bob, updateId)
+    const files = await filesOf(updateId)
+    expect(files.every((file) => existsSync(file))).toBe(true)
+    expect((await bob.agent.delete(`/api/updates/${updateId}`)).status).toBe(204)
+    expect(files.some((file) => existsSync(file))).toBe(false)
+  })
+
+  it('still deletes the update if removing a file fails, and reports it', async () => {
+    const { bob, id, updateId } = await postedUpdate()
+    await upload(bob, updateId)
+    vi.spyOn(storage, 'delete').mockRejectedValue(new Error('storage down'))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect((await bob.agent.delete(`/api/updates/${updateId}`)).status).toBe(204)
+    expect((await bob.agent.get(`/api/projects/${id}/updates`)).body.updates).toEqual([])
+    expect(errors).toHaveBeenCalledWith(expect.stringMatching(/^Removing photos\/.* from file storage failed:$/), expect.any(Error))
+    vi.restoreAllMocks()
+  })
+
+  it("adds nothing if file storage can't take the photo", async () => {
+    const { bob, updateId } = await postedUpdate()
+    vi.spyOn(storage, 'put').mockRejectedValue(new Error('storage down'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await upload(bob, updateId)
+    expect(res.status).toBe(500)
+    expect(res.body.error).toBe('Something went wrong on our side. Please try again.')
+    expect(await filesOf(updateId)).toEqual([])
+    vi.restoreAllMocks()
+  })
+
+  it("doesn't leave a file behind when the photo can't be added after all", async () => {
+    const { bob, updateId } = await postedUpdate()
+    // Another photo arrives between the check and the insert, making a seventh.
+    for (let i = 0; i < 5; i++) await upload(bob, updateId)
+    const put = storage.put.bind(storage)
+    vi.spyOn(storage, 'put').mockImplementationOnce(async (key, data, type) => {
+      await put(key, data, type)
+      await db.execute(
+        "INSERT INTO update_photos (update_id, position, mime_type, storage_key) VALUES (?, 99, 'image/jpeg', 'photos/elsewhere.jpg')",
+        [updateId],
+      )
+    })
+    const remove = vi.spyOn(storage, 'delete')
+    const res = await upload(bob, updateId)
+    expect(res.status).toBe(409)
+    expect(remove).toHaveBeenCalledOnce()
+    expect(existsSync(join(TEST_FILES, remove.mock.calls[0][0]))).toBe(false)
+    vi.restoreAllMocks()
+  })
+
+  it('answers 404 for a photo whose file is missing, and reports it', async () => {
+    const { bob, updateId } = await postedUpdate()
+    const photo = (await upload(bob, updateId)).body.photo
+    const [file] = await filesOf(updateId)
+    await storage.delete(file.slice(TEST_FILES.length + 1))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const res = await bob.agent.get(photo.url)
+    expect(res.status).toBe(404)
+    expect(res.body.error).toBe('No photo.')
+    expect(errors).toHaveBeenCalledWith('Photo missing from file storage:', expect.any(Error))
+    vi.restoreAllMocks()
   })
 
   it("only lets the update's author add photos, while the project is in progress", async () => {

@@ -1,5 +1,5 @@
 -- Brings a database made before password reset and email notifications were added up to date.
--- Run once: npm run db:shell < db/migrations/003-password-reset-and-notifications.sql
+-- npm run db:migrate runs it once.
 -- (New databases don't need it: db/schema.sql already has these.)
 
 ALTER TABLE users

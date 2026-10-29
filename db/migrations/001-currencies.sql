@@ -1,6 +1,6 @@
 -- Brings a database made before currencies were added up to date: each job and project gets a
 -- currency (existing ones keep US dollars), and amounts can go up to 100 million.
--- Run once: npm run db:shell < db/migrations/001-currencies.sql
+-- npm run db:migrate runs it once.
 -- (New databases don't need it: db/schema.sql already has these.)
 
 ALTER TABLE jobs

@@ -1,12 +1,15 @@
 // The work on a project: its stages, and the builder's progress updates with photos.
+import { randomUUID } from 'node:crypto'
 import express from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { PHOTOS_PER_UPDATE, PHOTO_MAX_BYTES, STAGES_MAX, STAGE_NAME_MAX, UPDATE_MAX } from '../../shared/rules.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { forbidden, notFound } from '../errors.ts'
+import { reportError } from '../errorTracking.ts'
 import { publish } from '../events.ts'
 import { loadProject, projectAs, projectFor } from '../projects.ts'
 import { me, requireRole, requireUser } from '../session.ts'
+import { photoKey, storage } from '../storage.ts'
 import { badRequest, fail, idFrom, invalid, longText, text } from '../validate.ts'
 import { projectDetail, stagesOf } from './projects.ts'
 
@@ -190,14 +193,33 @@ workRoutes.post(
     if (!isJpeg(data)) return badRequest(res, (m) => m.updates.jpegOnly)
     const { updateId, project } = await ownUpdate(res, req.params.id)
     if (project.status !== 'active') return fail(res, 409, (m) => m.updates.photosWhileActive)
-    // Only inserts while the update has fewer than PHOTOS_PER_UPDATE, checked in the same statement.
-    const [result] = await db.execute<ResultSetHeader>(
-      `INSERT INTO update_photos (update_id, position, mime_type, data)
-       SELECT ?, COALESCE(MAX(position) + 1, 0), 'image/jpeg', ? FROM update_photos WHERE update_id = ?
-       HAVING COUNT(*) < ?`,
-      [updateId, data, updateId, PHOTOS_PER_UPDATE],
+    // Checked again below; this saves storing a photo that can't be added.
+    const [[{ photos }]] = await db.execute<RowDataPacket[]>(
+      'SELECT COUNT(*) AS photos FROM update_photos WHERE update_id = ?',
+      [updateId],
     )
-    if (result.affectedRows === 0) return fail(res, 409, (m) => m.updates.tooManyPhotos)
+    if (photos >= PHOTOS_PER_UPDATE) return fail(res, 409, (m) => m.updates.tooManyPhotos)
+
+    // The file first, then the row: a photo is listed only once its file is there.
+    const key = photoKey(updateId, randomUUID())
+    await storage.put(key, data, 'image/jpeg')
+    // Only inserts while the update has fewer than PHOTOS_PER_UPDATE, checked in the same statement.
+    const [result] = await db
+      .execute<ResultSetHeader>(
+        `INSERT INTO update_photos (update_id, position, mime_type, storage_key)
+         SELECT ?, COALESCE(MAX(position) + 1, 0), 'image/jpeg', ? FROM update_photos WHERE update_id = ?
+         HAVING COUNT(*) < ?`,
+        [updateId, key, updateId, PHOTOS_PER_UPDATE],
+      )
+      .catch(async (err) => {
+        // Like the update being deleted meanwhile: the file has nothing to belong to.
+        await removeFiles([key])
+        throw err
+      })
+    if (result.affectedRows === 0) {
+      await removeFiles([key])
+      return fail(res, 409, (m) => m.updates.tooManyPhotos)
+    }
     publish(project.client_id, { type: 'project', projectId: project.id })
     res.status(201).json({ photo: { id: result.insertId, url: photoUrl(result.insertId) } })
   },
@@ -205,27 +227,44 @@ workRoutes.post(
 
 workRoutes.delete('/updates/:id', requireUser, async (req, res) => {
   const { updateId, project } = await ownUpdate(res, req.params.id)
+  const [photos] = await db.execute<RowDataPacket[]>('SELECT storage_key FROM update_photos WHERE update_id = ?', [
+    updateId,
+  ])
+  // Its photos go with it (ON DELETE CASCADE), and then their files.
   await db.execute('DELETE FROM updates WHERE id = ?', [updateId])
+  await removeFiles(photos.map((p) => p.storage_key))
   publish(project.client_id, { type: 'project', projectId: project.id })
   res.status(204).end()
 })
+
+/** Removes files nothing lists any more. If that fails, it's reported: the file just takes up room. */
+async function removeFiles(keys: string[]) {
+  for (const key of keys) {
+    await storage.delete(key).catch((err) => reportError(`Removing ${key} from file storage failed`, err))
+  }
+}
 
 // A photo, for the two people on its project only.
 workRoutes.get('/photos/:id', requireUser, async (req, res) => {
   const userId = me(res).id
   const [rows] = await db.execute<RowDataPacket[]>(
-    `SELECT ph.mime_type, ph.data FROM update_photos ph
+    `SELECT ph.mime_type, ph.storage_key FROM update_photos ph
      JOIN updates up ON up.id = ph.update_id
      JOIN projects p ON p.id = up.project_id
      WHERE ph.id = ? AND (p.builder_id = ? OR p.client_id = ?)`,
     [idFrom(req.params.id) ?? 0, userId, userId],
   )
   if (!rows[0]) return fail(res, 404, (m) => m.updates.noPhoto)
+  const data = await storage.get(rows[0].storage_key)
+  if (!data) {
+    reportError('Photo missing from file storage', new Error(`No file ${rows[0].storage_key} in the ${storage.description}`))
+    return fail(res, 404, (m) => m.updates.noPhoto)
+  }
   res.set({
     'Content-Type': rows[0].mime_type,
     // Photos never change, so this one can be cached for good.
     'Cache-Control': 'private, max-age=31536000, immutable',
     'X-Content-Type-Options': 'nosniff',
   })
-  res.send(rows[0].data)
+  res.send(data)
 })

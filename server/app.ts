@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import express from 'express'
@@ -5,6 +6,7 @@ import type { NextFunction, Request, Response } from 'express'
 import helmet from 'helmet'
 import { db } from './db.ts'
 import { HttpError } from './errors.ts'
+import { browserErrorTracking, reportError } from './errorTracking.ts'
 import { say } from './i18n/index.ts'
 import type { Text } from './i18n/index.ts'
 import { accountRoutes } from './routes/account.ts'
@@ -31,11 +33,25 @@ export interface AppOptions {
   /** Also serve the built web app (from distDir), with security headers. */
   production: boolean
   distDir: string
+  /** Where the web app sends its errors, if anywhere (see errorTracking.ts). */
+  errorTracking: ReturnType<typeof browserErrorTracking>
 }
 
 const defaults: AppOptions = {
   production: process.env.NODE_ENV === 'production',
   distDir: fileURLToPath(new URL('../dist/', import.meta.url)),
+  errorTracking: browserErrorTracking(),
+}
+
+const escapeAttribute = (value: string) =>
+  value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** The built app's page, telling the app where to send its errors (src/errorTracking.ts reads it). */
+export function pageWithSettings(html: string, errorTracking: AppOptions['errorTracking']) {
+  if (!errorTracking) return html
+  const { dsn, environment, release } = errorTracking
+  const meta = `<meta name="error-tracking" content="${escapeAttribute(JSON.stringify({ dsn, environment, release }))}" />`
+  return html.replace('</head>', `    ${meta}\n  </head>`)
 }
 
 /** The API as an Express app. index.ts starts it; tests call it directly. */
@@ -51,6 +67,8 @@ export function createApp(options: AppOptions = defaults) {
           directives: {
             // blob: for previews of photos picked but not uploaded yet.
             'img-src': ["'self'", 'data:', 'blob:'],
+            // The app sends its errors straight to Sentry, when they're tracked.
+            'connect-src': ["'self'", ...(options.errorTracking ? [options.errorTracking.origin] : [])],
             // Leave plain http alone, so the production build can also be tried locally.
             'upgrade-insecure-requests': null,
           },
@@ -97,10 +115,18 @@ export function createApp(options: AppOptions = defaults) {
       }),
     )
     // Any other page (like /projects/12 or /invite from an email link) is handled by the app itself.
-    app.use((req, res, next) => {
+    // The page is read once: a new build comes with a new server.
+    let page: Promise<string> | undefined
+    app.use(async (req, res, next) => {
       if (req.method !== 'GET') return next()
-      res.set('Cache-Control', 'no-cache')
-      res.sendFile(join(options.distDir, 'index.html'))
+      page ??= readFile(join(options.distDir, 'index.html'), 'utf8').then((html) =>
+        pageWithSettings(html, options.errorTracking),
+      )
+      const html = await page.catch((err) => {
+        page = undefined
+        throw err
+      })
+      res.set('Cache-Control', 'no-cache').type('html').send(html)
     })
   }
 
@@ -110,7 +136,8 @@ export function createApp(options: AppOptions = defaults) {
       return
     }
     const status = err.status && err.status < 500 ? err.status : 500
-    if (status === 500) console.error(err)
+    // The path, not the whole address: some links carry a token in the query.
+    if (status === 500) reportError('Request failed', err, { request: `${req.method} ${req.path}` })
     let message: Text = (m) => m.general.invalidRequest
     if (err.code === 'ECONNREFUSED') message = (m) => m.general.noDatabase
     else if (status === 413) message = (m) => m.general.fileTooBig

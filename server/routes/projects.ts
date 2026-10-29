@@ -15,6 +15,7 @@ import { hashToken, newSessionToken } from '../auth.ts'
 import { conversationBetween, ensureConversation } from '../conversations.ts'
 import { db, inTransaction, ms } from '../db.ts'
 import { conflict, notFound } from '../errors.ts'
+import { reportError } from '../errorTracking.ts'
 import { languageOf, messagesIn } from '../i18n/index.ts'
 import type { Text } from '../i18n/index.ts'
 import { publish } from '../events.ts'
@@ -367,7 +368,7 @@ projectRoutes.post('/projects', requireRole('builder'), async (req, res) => {
   const project = (await loadProject(projectId))!
   const link = owner ? `${appUrl()}/projects/${projectId}` : await newInviteLink(projectId, true)
   await sendProposalEmail(builder, project, clientEmail, link, !client, languageOf(req)).catch((err) =>
-    console.error('Proposal email failed:', err),
+    reportError('Proposal email failed', err),
   )
   publish(owner?.id, { type: 'project', projectId })
   res.status(201).json({ project: await projectDetail((await loadProject(projectId))!, 'builder') })

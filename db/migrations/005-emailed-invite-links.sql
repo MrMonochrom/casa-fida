@@ -1,5 +1,5 @@
 -- Brings a database made before emailed invite links could confirm an address up to date.
--- Run once: npm run db:shell < db/migrations/005-emailed-invite-links.sql
+-- npm run db:migrate runs it once.
 -- (New databases don't need it: db/schema.sql already has it.)
 
 -- Invite links already sent count as ones the builder may have seen, so they don't confirm anything.

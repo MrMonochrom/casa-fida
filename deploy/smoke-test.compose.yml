@@ -1,0 +1,21 @@
+# For deploy/smoke-test.sh: the stack from docker-compose.yml on this computer, with a local
+# S3-compatible server (Versity's S3 gateway) standing in for the bucket, and Caddy answering on
+# https://localhost:8443 with a certificate of its own.
+services:
+  s3:
+    image: versity/versitygw:v1.8.0
+    entrypoint: ["sh", "-c", "mkdir -p /data/casa-fida && exec versitygw --access smoke-test-key --secret smoke-test-secret posix /data"]
+    volumes:
+      - s3:/data
+
+  app:
+    depends_on:
+      s3:
+        condition: service_started
+
+  caddy:
+    ports: !override
+      - "127.0.0.1:8443:443"
+
+volumes:
+  s3:

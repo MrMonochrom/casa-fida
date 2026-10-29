@@ -35,10 +35,11 @@ export function connect(): Promise<Database> {
   return mysql.createConnection({ ...connectionOptions, database: E2E_DB, multipleStatements: true, dateStrings: true })
 }
 
-/** Empties every table and loads the sample data again. */
+/** Empties every table (but the list of migrations) and loads the sample data again. */
 export async function reloadSampleData(db: Database) {
   const [tables] = await db.query<RowDataPacket[]>(
-    "SELECT TABLE_NAME AS name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'",
+    `SELECT TABLE_NAME AS name FROM information_schema.tables
+     WHERE table_schema = ? AND table_type = 'BASE TABLE' AND TABLE_NAME <> 'schema_migrations'`,
     [E2E_DB],
   )
   await db.query('SET FOREIGN_KEY_CHECKS = 0')

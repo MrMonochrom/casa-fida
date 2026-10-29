@@ -1,6 +1,6 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
-import { TEST_DB } from './server/test/testDb.ts'
+import { TEST_DB, TEST_FILES } from './server/test/testDb.ts'
 
 export default defineConfig({
   test: {
@@ -32,8 +32,9 @@ export default defineConfig({
           include: ['server/**/*.api.test.ts'],
           globalSetup: ['server/test/globalSetup.ts'],
           setupFiles: ['server/test/setup.ts'],
-          // Rate limits are off, except in the tests about them (they switch them back on).
-          env: { DB_NAME: TEST_DB, RATE_LIMITS: 'off' },
+          // Rate limits are off, except in the tests about them (they switch them back on). Photos go to
+          // a folder of their own, even where a bucket is set up.
+          env: { DB_NAME: TEST_DB, RATE_LIMITS: 'off', STORAGE_DIR: TEST_FILES, S3_BUCKET: '' },
           // The test files share one database, so they run one at a time.
           fileParallelism: false,
         },
